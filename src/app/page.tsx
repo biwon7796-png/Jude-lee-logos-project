@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -11,9 +12,10 @@ declare global {
 }
 
 // ==============================================================================
-// ★ 1. 이미지 파일 목록 (여기를 캡틴의 파일 이름으로 채워주세요!)
+// ★ 1. 이미지 파일 목록 (여기에 캡틴의 파일 이름을 넣어주세요!)
 // ==============================================================================
-const LOCAL_BACKGROUNDS = [
+
+ const LOCAL_BACKGROUNDS = [
   '/backgrounds/back1.avif', 
   '/backgrounds/back2.avif',
   '/backgrounds/back3.avif',
@@ -25,10 +27,9 @@ const LOCAL_BACKGROUNDS = [
   '/backgrounds/back9.avif',
   '/backgrounds/back10.avif',
   '/backgrounds/back11.avif',
-  // 여기에 파일 이름을 계속 추가하세요!
 ];
 
-// 2. 목록 중 하나를 랜덤으로 선택하여 URL 확정
+// 목록 중 하나를 랜덤으로 선택하여 URL 확정
 const BACKGROUND_IMAGE_URL = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
 // ==============================================================================
 
@@ -194,7 +195,7 @@ export default function Home() {
         const rightWall = Bodies.rectangle(window.innerWidth + 30, window.innerHeight / 2, 60, window.innerHeight, wallOptions);
         bodiesRef.current = []; 
         const mouse = Mouse.create(render.canvas);
-        const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } });
+        const mouseConstraint = Matter.MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } });
         render.mouse = mouse;
         Composite.add(world, [ground, leftWall, rightWall, mouseConstraint]);
         Render.run(render);
