@@ -14,17 +14,17 @@ declare global {
 // ★ 1. 이미지 파일 목록 (여기를 캡틴의 파일 이름으로 채워주세요!)
 // ==============================================================================
 const LOCAL_BACKGROUNDS = [
-  '/backgrounds/back1.jpg', 
-  '/backgrounds/back2.jpg',
-  '/backgrounds/back3.jpg',
-  '/backgrounds/back4.jpg',
-  '/backgrounds/back5.jpg',
-  '/backgrounds/back6.jpg',
-  '/backgrounds/back7.jpg',
-  '/backgrounds/back8.jpg',
-  '/backgrounds/back9.jpg',
-  '/backgrounds/back10.jpg',
-  '/backgrounds/back11.jpg',
+  '/backgrounds/back1.avif', 
+  '/backgrounds/back2.avif',
+  '/backgrounds/back3.avif',
+  '/backgrounds/back4.avif',
+  '/backgrounds/back5.avif',
+  '/backgrounds/back6.avif',
+  '/backgrounds/back7.avif',
+  '/backgrounds/back8.avif',
+  '/backgrounds/back9.avif',
+  '/backgrounds/back10.avif',
+  '/backgrounds/back11.avif',
   // 여기에 파일 이름을 계속 추가하세요!
 ];
 
