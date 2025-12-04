@@ -246,7 +246,7 @@ export default function Home() {
     if (Math.abs(cleanInput.length - cleanTarget.length) > maxErrors * 2) return false;
 
     // 2. Levenshtein Distance 계산
-    const distance = levenshteinDistance(cleanInput, cleanTarget);
+    const distance = LevenshteinDistance(cleanInput, cleanTarget);
     
     // 3. 오차가 허용치 내인지 확인
     return distance <= maxErrors; 
