@@ -1,5 +1,5 @@
 'use client';
-
+import leven from 'leven';
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
@@ -7,10 +7,10 @@ import Matter from 'matter-js';
 // src/app/page.tsx 맨 윗부분 (VTT 타입 선언 아래)
 
 // ==============================================================================
-// ★ 1. 이미지 파일 목록 (JPG 파일 11개)
+// ★ 1. 이미지 파일 목록 (JPEG 파일 10개)
 // ==============================================================================
 const LOCAL_BACKGROUNDS = [
-  // 캡틴의 파일 이름과 확장자를 정확히 적어주세요! (JPG로 가정합니다)
+  // 캡틴의 파일 이름과 확장자를 정확히 적어주세요! (JPEG로 가정합니다)
   '/backgrounds/back1.jpeg', 
   '/backgrounds/back2.jpeg',
   '/backgrounds/back3.jpeg',
@@ -240,13 +240,13 @@ export default function Home() {
     if (cleanInput.length < 5 || cleanTarget.length === 0) return false;
 
     // 최대 허용 오차 (Max Errors)
-    const maxErrors = Math.ceil(cleanTarget.length * 0.05) + 1; // 5% 오차 + 1글자 여유
+    const maxErrors = Math.ceil(cleanTarget.length * 0.10) + 2; // 10% 오차 + 2글자 여유
 
     // 1. 전체 길이가 맞아야 함 (오차가 너무 크면 실패)
     if (Math.abs(cleanInput.length - cleanTarget.length) > maxErrors * 2) return false;
 
     // 2. Levenshtein Distance 계산
-    const distance = LevenshteinDistance(cleanInput, cleanTarget);
+     const distance = leven(cleanInput, cleanTarget);
     
     // 3. 오차가 허용치 내인지 확인
     return distance <= maxErrors; 
