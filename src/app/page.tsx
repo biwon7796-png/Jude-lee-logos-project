@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
-// 배경 이미지
+// ★ 배경 이미지 설정
 const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
 
 type BibleVerse = {
@@ -98,10 +98,7 @@ export default function Home() {
     localStorage.setItem('logos_last_book', selectedBook);
   }, [selectedBook, allVerses]);
 
-  // ==============================================================================
-  // ★ 3. (수정됨) 장 선택 -> 필사 목록 갱신 & 시작 위치 잡기
-  // 핵심: completedSet(저장기록)이 바뀐다고 해서 여기서 재실행되면 안 됩니다!
-  // ==============================================================================
+  // 3. 장 선택 -> 필사 목록 갱신 & 시작 위치 잡기
   useEffect(() => {
     if (!selectedBook || !selectedChapter) return;
     localStorage.setItem('logos_last_chapter', selectedChapter.toString());
@@ -112,13 +109,13 @@ export default function Home() {
 
     setActiveVerses(targetVerses);
 
-    // ★ 처음 장을 바꿨을 때만! 아직 안 한 절을 찾아 이동합니다.
+    // ★ 완료하지 않은 첫 번째 절로 이동
     const firstIncompleteIndex = targetVerses.findIndex(v => !completedSet.has(v.ref));
     setVerseIndex(firstIncompleteIndex !== -1 ? firstIncompleteIndex : 0);
     setInputText("");
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBook, selectedChapter, allVerses]); // ★ completedSet 의존성 제거
+  }, [selectedBook, selectedChapter, allVerses]); 
 
   // 4. 물리 엔진
   useEffect(() => {
@@ -169,7 +166,6 @@ export default function Home() {
     playSound('heaven');
     setIsSuccess(true);
     
-    // 저장
     const newSet = new Set(completedSet);
     newSet.add(verseRef);
     setCompletedSet(newSet);
@@ -177,10 +173,9 @@ export default function Home() {
 
     setInputText("");
     
-    // 1.2초 뒤 다음 절로 '자연스럽게' 이동
     setTimeout(() => {
         if (verseIndex < activeVerses.length - 1) {
-            setVerseIndex(prev => prev + 1); // 단순히 숫자만 1 올림
+            setVerseIndex(prev => prev + 1);
         } else {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
         }
@@ -197,7 +192,6 @@ export default function Home() {
     }
   };
 
-  // 성경읽기표
   const renderReadingTable = () => {
     if (!showTable) return null;
     const chaptersInBook = chapterList.map(ch => {
