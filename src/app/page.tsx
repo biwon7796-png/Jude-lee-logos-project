@@ -3,14 +3,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
-// VTT를 위한 브라우저 타입 선언 (TypeScript 오류 방지)
+// VTT를 위한 타입 선언
 declare global {
   interface Window {
     webkitSpeechRecognition: any;
   }
 }
 
-const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
+const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759052-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
 
 type BibleVerse = {
   ref: string; text: string; book: string; chapter: number; verse: number;
@@ -20,7 +20,7 @@ export default function Home() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
   const bodiesRef = useRef<Matter.Body[]>([]); 
-  const inputRef = useRef<HTMLInputElement>(null); // 입력창 참조용
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const [allVerses, setAllVerses] = useState<BibleVerse[]>([]);
   const [activeVerses, setActiveVerses] = useState<BibleVerse[]>([]);
@@ -48,39 +48,34 @@ export default function Home() {
     } catch (e) {}
   };
 
-  // ============================================================
-  // ★ NEW: 음성 인식 기능
-  // ============================================================
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window)) {
         alert('이 브라우저(권장: Chrome)에서는 음성 인식이 지원되지 않습니다.');
         return;
     }
+    // @ts-ignore
     const recognition = new window.webkitSpeechRecognition();
-    recognition.continuous = false; // 한 번만 인식
-    recognition.interimResults = true; // 중간 결과도 보여줌
+    recognition.continuous = false;
+    recognition.interimResults = true;
     recognition.lang = 'ko-KR';
 
     recognition.onstart = () => {
-        // 마이크가 켜졌음을 알림
         if (inputRef.current) inputRef.current.placeholder = "말씀하세요...";
     };
 
     recognition.onresult = (event: any) => {
-      // 마지막 인식 결과를 입력창에 반영
       const transcript = event.results[event.results.length - 1][0].transcript;
       setInputText(transcript);
     };
 
     recognition.onend = () => {
-        // 인식이 끝나면 원래 Placeholder로 복귀
         if (inputRef.current) inputRef.current.placeholder = "음성 인식이 끝났습니다. Enter를 누르세요";
     };
 
     recognition.start();
   };
 
-  // 1. 초기 로딩 및 데이터 파싱 (생략)
+  // 1. 초기 로딩 및 데이터 파싱
   useEffect(() => {
     const savedCompleted = localStorage.getItem('logos_completed');
     if (savedCompleted) setCompletedSet(new Set(JSON.parse(savedCompleted)));
@@ -117,7 +112,7 @@ export default function Home() {
       })
       .catch(err => { console.error(err); setLoading(false); });
   }, []);
-  
+
   // 2. 선택/물리 엔진/핸들러 로직 (생략 - 위와 동일)
   useEffect(() => {
     if (!selectedBook) return;
@@ -205,7 +200,6 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !loading) {
-        // 입력창의 모든 텍스트를 기준으로 비교
         const cleanInput = inputText.trim().replace(/\s+/g, '');
         const cleanTarget = currentVerse.text.trim().replace(/\s+/g, '');
         if (cleanInput === cleanTarget) handleSuccess(currentVerse.ref);
@@ -213,9 +207,6 @@ export default function Home() {
     }
   };
 
-  // ============================================================
-  // ★ NEW: 실시간 하이라이팅 렌더링 함수
-  // ============================================================
   const renderVerseText = () => {
     const targetText = currentVerse.text;
     const typedText = inputText;
@@ -227,7 +218,6 @@ export default function Home() {
             fontWeight: '900', 
             lineHeight: '1.6', 
             wordBreak: 'keep-all', 
-            // 성공/실패 시 글로우 효과는 전체 텍스트에 적용
             textShadow: isSuccess ? '0 0 40px #00ffff' : '0 0 15px #ffffff, 0 0 5px #000000', 
             transition: 'all 0.5s ease', 
             padding: '0 10px' 
@@ -237,11 +227,11 @@ export default function Home() {
             const targetChar = targetText[index];
             const inputChar = typedText[index];
             
-            let charColor = '#ffffff'; // 기본색 (흰색)
+            let charColor = '#ffffff';
 
             if (isTyped) {
                 const isCorrect = targetChar === inputChar;
-                charColor = isCorrect ? '#ffe600' : '#ff5555'; // 노란색(성공) 또는 빨간색(실패)
+                charColor = isCorrect ? '#ffe600' : '#ff5555';
             }
 
             return (
@@ -250,8 +240,7 @@ export default function Home() {
                 style={{ 
                     color: charColor, 
                     transition: 'color 0.1s linear', 
-                    // 다음 글자를 칠 때 빨간색으로 깜빡이는 효과 (디버깅 용)
-                    textDecoration: index === typedText.length && index < targetText.length && targetText[index] !== ' ' && inputChar ? 'underline' : 'none'
+                    textDecoration: index === typedText.length && index < targetText.length && targetChar !== ' ' && inputChar ? 'underline' : 'none'
                 }}
               >
                 {char}
@@ -262,7 +251,6 @@ export default function Home() {
     );
   };
   
-  // 성경읽기표 렌더링 (생략 - 위와 동일)
   const renderReadingTable = () => {
     if (!showTable) return null;
     const chaptersInBook = chapterList.map(ch => {
@@ -273,11 +261,42 @@ export default function Home() {
     });
 
     return (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+            <div style={{ width: '90%', maxWidth: '800px', background: '#f5f5f5', padding: '40px', borderRadius: '20px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '2px solid #ddd', paddingBottom: '15px' }}>
+                    <h2 style={{ margin: 0, fontSize: '28px', color: '#111', fontWeight: '800' }}>📖 {selectedBook} 읽기표</h2>
+                    <button onClick={() => setShowTable(false)} style={{ background: 'transparent', border: 'none', color: '#333', fontSize: '28px', cursor: 'pointer' }}>✕</button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '15px', maxHeight: '60vh', overflowY: 'auto', paddingRight: '10px' }}>
+                    {chaptersInBook.map(item => (
+                        <div key={item.chapter} onClick={() => { setSelectedChapter(item.chapter); setShowTable(false); }}
+                            style={{
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', borderRadius: '12px', cursor: 'pointer', padding: '10px',
+                                background: '#ffffff', border: item.chapter === selectedChapter ? '2px solid #000' : '1px solid #ddd', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', transition: 'transform 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-3px)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+                        >
+                            <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#333', marginBottom: '5px' }}>{item.chapter}장</span>
+                            <div style={{ width: '100%', height: '8px', background: '#eee', borderRadius: '4px', overflow: 'hidden', marginBottom: '5px' }}>
+                                <div style={{ width: `${item.progress}%`, height: '100%', background: item.isFull ? '#FFD700' : '#4CAF50', transition: 'width 0.5s ease' }} />
+                            </div>
+                            <span style={{ fontSize: '12px', color: item.isFull ? '#DAA520' : '#888', fontWeight: '600' }}>{item.isFull ? '완료!' : `${item.progress}%`}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+  };
+
+
+  return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url('${BACKGROUND_IMAGE_URL}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
       <div ref={sceneRef} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
 
-      <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
+      <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
       
       {renderReadingTable()}
       
@@ -297,7 +316,6 @@ export default function Home() {
                 {completedSet.has(currentVerse.ref) && (<span style={{ marginLeft: '8px', color: '#ffe600', border: '1px solid #ffe600', padding: '1px 6px', borderRadius: '8px', fontSize: '11px', backgroundColor: 'rgba(0,0,0,0.5)' }}>완료됨</span>)}
             </span>
             
-            {/* ★★★ 여기가 핵심입니다! renderVerseText 함수를 호출합니다 ★★★ */}
             {renderVerseText()} 
             
         </div>
@@ -310,10 +328,14 @@ export default function Home() {
                     type="text" value={inputText} onChange={handleInputChange} onKeyDown={handleKeyDown} 
                     placeholder="말씀을 입력하고 Enter" spellCheck="false" 
                     style={{ 
-                        flexGrow: 1, padding: '15px', fontSize: '16px', borderRadius: '15px 0 0 15px', border: '2px solid rgba(255,255,255,0.3)', 
-                        background: 'rgba(0, 0, 0, 0.4)', color: '#ffe600', outline: 'none', textAlign: 'center', 
-                        boxShadow: '0 15px 40px rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', 
-                        borderRight: 'none',
+                        flexGrow: 1, padding: '15px', fontSize: '16px', borderRadius: '15px 0 0 15px', 
+                        border: '2px solid rgba(255,255,255,0.3)', 
+                        background: 'rgba(0, 0, 0, 0.4)', 
+                        color: '#ffe600', 
+                        outline: 'none', 
+                        textAlign: 'center', 
+                        boxShadow: '0 15px 40px rgba(0,0,0,0.6)', 
+                        borderRight: 'none', // This border is for the clean connection look
                         transition: 'border-color 0.3s, box-shadow 0.3s' 
                     }} 
                     onFocus={(e) => { e.target.style.borderColor = '#ffe600'; e.target.style.boxShadow = '0 0 30px rgba(255, 230, 0, 0.3)'; }} 
@@ -324,10 +346,10 @@ export default function Home() {
                 <button 
                     onClick={startListening}
                     style={{
-                        background: 'rgba(255, 230, 0, 0.9)', color: 'black', border: 'none', 
+                        background: 'rgba(255, 230, 0, 0.9)', color: 'black', border: '2px solid #ffe600', // Final intended border
                         padding: '0 15px', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold',
                         borderRadius: '0 15px 15px 0', boxShadow: '0 15px 40px rgba(0,0,0,0.6)',
-                        border: '2px solid #ffe600', borderLeft: 'none',
+                        borderLeft: 'none', // This prevents the double border line
                     }}
                 >
                     🎤
