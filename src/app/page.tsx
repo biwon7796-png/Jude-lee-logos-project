@@ -3,9 +3,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
-// ==============================================================================
-// ★ 배경 이미지 주소 (여기를 바꾸면 배경이 바뀝니다)
-// ==============================================================================
+// VTT를 위한 브라우저 타입 선언 (TypeScript 오류 방지)
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any;
+  }
+}
+
 const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
 
 type BibleVerse = {
@@ -16,30 +20,24 @@ export default function Home() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
   const bodiesRef = useRef<Matter.Body[]>([]); 
+  const inputRef = useRef<HTMLInputElement>(null); // 입력창 참조용
 
-  // 데이터 상태
   const [allVerses, setAllVerses] = useState<BibleVerse[]>([]);
   const [activeVerses, setActiveVerses] = useState<BibleVerse[]>([]);
-  
-  // 선택 옵션
   const [bookList, setBookList] = useState<string[]>([]);
   const [chapterList, setChapterList] = useState<number[]>([]);
   const [selectedBook, setSelectedBook] = useState("");
   const [selectedChapter, setSelectedChapter] = useState(0);
 
-  // 진행 상태
   const [verseIndex, setVerseIndex] = useState(0);
   const [inputText, setInputText] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  // 완료 기록 & 테이블
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
   const [showTable, setShowTable] = useState(false);
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
 
-  // 소리 재생 (.wav 확장자 사용)
   const playSound = (type: 'type' | 'heaven' | 'error') => {
     try {
         const audio = new Audio(`/sounds/${type}.wav`);
@@ -50,7 +48,39 @@ export default function Home() {
     } catch (e) {}
   };
 
-  // 1. 초기 로딩 및 데이터 파싱
+  // ============================================================
+  // ★ NEW: 음성 인식 기능
+  // ============================================================
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window)) {
+        alert('이 브라우저(권장: Chrome)에서는 음성 인식이 지원되지 않습니다.');
+        return;
+    }
+    const recognition = new window.webkitSpeechRecognition();
+    recognition.continuous = false; // 한 번만 인식
+    recognition.interimResults = true; // 중간 결과도 보여줌
+    recognition.lang = 'ko-KR';
+
+    recognition.onstart = () => {
+        // 마이크가 켜졌음을 알림
+        if (inputRef.current) inputRef.current.placeholder = "말씀하세요...";
+    };
+
+    recognition.onresult = (event: any) => {
+      // 마지막 인식 결과를 입력창에 반영
+      const transcript = event.results[event.results.length - 1][0].transcript;
+      setInputText(transcript);
+    };
+
+    recognition.onend = () => {
+        // 인식이 끝나면 원래 Placeholder로 복귀
+        if (inputRef.current) inputRef.current.placeholder = "음성 인식이 끝났습니다. Enter를 누르세요";
+    };
+
+    recognition.start();
+  };
+
+  // 1. 초기 로딩 및 데이터 파싱 (생략)
   useEffect(() => {
     const savedCompleted = localStorage.getItem('logos_completed');
     if (savedCompleted) setCompletedSet(new Set(JSON.parse(savedCompleted)));
@@ -67,14 +97,11 @@ export default function Home() {
 
         const parsedData: BibleVerse[] = rawData.map(item => {
             const match = item.ref.match(/^([^\d:]+)\s*(\d+):(\d+)$/);
-            if (match) {
-                return { ...item, book: match[1].trim(), chapter: parseInt(match[2]), verse: parseInt(match[3]) };
-            }
+            if (match) { return { ...item, book: match[1].trim(), chapter: parseInt(match[2]), verse: parseInt(match[3]) }; }
             return { ...item, book: "기타", chapter: 0, verse: 0 };
         }).filter(v => v.book !== "기타");
 
         setAllVerses(parsedData);
-
         const books: string[] = [];
         parsedData.forEach(v => { if (!books.includes(v.book)) books.push(v.book); });
         setBookList(books);
@@ -90,8 +117,8 @@ export default function Home() {
       })
       .catch(err => { console.error(err); setLoading(false); });
   }, []);
-
-  // 2. 책 선택 -> 장 목록 갱신
+  
+  // 2. 선택/물리 엔진/핸들러 로직 (생략 - 위와 동일)
   useEffect(() => {
     if (!selectedBook) return;
     const versesInBook = allVerses.filter(v => v.book === selectedBook);
@@ -101,31 +128,22 @@ export default function Home() {
     localStorage.setItem('logos_last_book', selectedBook);
   }, [selectedBook, allVerses]);
 
-  // 3. 장 선택 -> 필사 목록 갱신 & 이어하기 위치 잡기
   useEffect(() => {
     if (!selectedBook || !selectedChapter) return;
     localStorage.setItem('logos_last_chapter', selectedChapter.toString());
-
-    const targetVerses = allVerses.filter(v => 
-        v.book === selectedBook && v.chapter === selectedChapter
-    ).sort((a, b) => a.verse - b.verse);
-
+    const targetVerses = allVerses.filter(v => v.book === selectedBook && v.chapter === selectedChapter).sort((a, b) => a.verse - b.verse);
     setActiveVerses(targetVerses);
-
-    // 완료하지 않은 첫 번째 절로 이동 (이어하기)
     const firstIncompleteIndex = targetVerses.findIndex(v => !completedSet.has(v.ref));
     setVerseIndex(firstIncompleteIndex !== -1 ? firstIncompleteIndex : 0);
     setInputText("");
-    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBook, selectedChapter, allVerses]);
 
-  // 4. 물리 엔진 초기화 (배경/벽만)
   useEffect(() => {
     const initPhysics = async () => {
       if (typeof window === 'undefined') return;
       try {
-        // @ts-ignore: TypeScript에게 pathseg 모듈은 안전하다고 알려줌
+        // @ts-ignore
         await import('pathseg');
         // @ts-ignore
         const decomp = await import('poly-decomp');
@@ -137,20 +155,15 @@ export default function Home() {
         const world = engine.world;
         if (!sceneRef.current) return;
         
-        // 렌더러 배경 투명
         const render = Render.create({ element: sceneRef.current, engine: engine, options: { width: window.innerWidth, height: window.innerHeight, background: 'transparent', wireframes: false, showAngleIndicator: false, pixelRatio: 1 } });
-        
-        // 벽 생성 (반투명 검정색)
         const wallOptions = { isStatic: true, render: { fillStyle: '#000000', opacity: 0.3 } };
         const ground = Bodies.rectangle(window.innerWidth / 2, window.innerHeight + 30, window.innerWidth, 60, wallOptions);
         const leftWall = Bodies.rectangle(-30, window.innerHeight / 2, 60, window.innerHeight, wallOptions);
         const rightWall = Bodies.rectangle(window.innerWidth + 30, window.innerHeight / 2, 60, window.innerHeight, wallOptions);
-        
-        bodiesRef.current = []; // 글자 제거
+        bodiesRef.current = []; 
         const mouse = Mouse.create(render.canvas);
         const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } } });
         render.mouse = mouse;
-
         Composite.add(world, [ground, leftWall, rightWall, mouseConstraint]);
         Render.run(render);
         const runner = Runner.create();
@@ -163,9 +176,7 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const triggerHolyEffect = () => {
-    // 글자가 없으므로 효과 없음
-  };
+  const triggerHolyEffect = () => {}; 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputText(e.target.value);
@@ -182,8 +193,6 @@ export default function Home() {
     localStorage.setItem('logos_completed', JSON.stringify(Array.from(newSet)));
 
     setInputText("");
-    
-    // ★★★ 여기가 최종 수정됨: 300ms (0.3초) 지연 후 다음 절로 이동 ★★★
     setTimeout(() => { 
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
@@ -191,11 +200,12 @@ export default function Home() {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
         }
         setIsSuccess(false);
-    }, 300); // 0.3초로 변경
+    }, 300); 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !loading) {
+        // 입력창의 모든 텍스트를 기준으로 비교
         const cleanInput = inputText.trim().replace(/\s+/g, '');
         const cleanTarget = currentVerse.text.trim().replace(/\s+/g, '');
         if (cleanInput === cleanTarget) handleSuccess(currentVerse.ref);
@@ -203,7 +213,56 @@ export default function Home() {
     }
   };
 
-  // 성경읽기표 렌더링
+  // ============================================================
+  // ★ NEW: 실시간 하이라이팅 렌더링 함수
+  // ============================================================
+  const renderVerseText = () => {
+    const targetText = currentVerse.text;
+    const typedText = inputText;
+
+    return (
+        <h1 style={{ 
+            color: isSuccess ? '#00ffff' : '#ffffff', 
+            fontSize: '18px', 
+            fontWeight: '900', 
+            lineHeight: '1.6', 
+            wordBreak: 'keep-all', 
+            // 성공/실패 시 글로우 효과는 전체 텍스트에 적용
+            textShadow: isSuccess ? '0 0 40px #00ffff' : '0 0 15px #ffffff, 0 0 5px #000000', 
+            transition: 'all 0.5s ease', 
+            padding: '0 10px' 
+        }}>
+          {targetText.split('').map((char, index) => {
+            const isTyped = index < typedText.length;
+            const targetChar = targetText[index];
+            const inputChar = typedText[index];
+            
+            let charColor = '#ffffff'; // 기본색 (흰색)
+
+            if (isTyped) {
+                const isCorrect = targetChar === inputChar;
+                charColor = isCorrect ? '#ffe600' : '#ff5555'; // 노란색(성공) 또는 빨간색(실패)
+            }
+
+            return (
+              <span 
+                key={index} 
+                style={{ 
+                    color: charColor, 
+                    transition: 'color 0.1s linear', 
+                    // 다음 글자를 칠 때 빨간색으로 깜빡이는 효과 (디버깅 용)
+                    textDecoration: index === typedText.length && index < targetText.length && targetText[index] !== ' ' && inputChar ? 'underline' : 'none'
+                }}
+              >
+                {char}
+              </span>
+            );
+          })}
+        </h1>
+    );
+  };
+  
+  // 성경읽기표 렌더링 (생략 - 위와 동일)
   const renderReadingTable = () => {
     if (!showTable) return null;
     const chaptersInBook = chapterList.map(ch => {
@@ -214,7 +273,7 @@ export default function Home() {
     });
 
     return (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
             <div style={{ width: '90%', maxWidth: '800px', background: '#f5f5f5', padding: '40px', borderRadius: '20px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '2px solid #ddd', paddingBottom: '15px' }}>
                     <h2 style={{ margin: 0, fontSize: '28px', color: '#111', fontWeight: '800' }}>📖 {selectedBook} 읽기표</h2>
@@ -243,16 +302,13 @@ export default function Home() {
     );
   };
 
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
-      
-      {/* ★★★ 배경 이미지 (opacity: 0.5로 수정됨) ★★★ */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url('${BACKGROUND_IMAGE_URL}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
-      
-      {/* 물리 엔진 */}
       <div ref={sceneRef} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
 
-      <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
+      <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '8px 16px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
       
       {renderReadingTable()}
       
@@ -265,33 +321,49 @@ export default function Home() {
       <div style={{ position: 'absolute', top: '55%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, textAlign: 'center', width: '95%', maxWidth: '1000px', pointerEvents: 'none' }}>
         <div style={{ marginBottom: '30px' }}>
             <span style={{ 
-                color: '#ffffff', 
-                fontSize: '13px', 
-                letterSpacing: '2px', 
-                display: 'block', 
-                marginBottom: '10px', 
-                textShadow: '0 0 3px #000000, 0 0 1px #ffffff' 
-            }}>
+                color: '#ffffff', fontSize: '13px', letterSpacing: '2px', display: 'block', marginBottom: '10px', 
+                textShadow: '0 0 3px #000000, 0 0 1px #ffffff' }}>
                 LOGOS PROJECT : {currentVerse.book} {currentVerse.chapter}:{currentVerse.verse}
                 <span style={{ marginLeft: '10px', color: '#dddddd', fontSize: '12px' }}>({verseIndex + 1} / {activeVerses.length})</span>
                 {completedSet.has(currentVerse.ref) && (<span style={{ marginLeft: '8px', color: '#ffe600', border: '1px solid #ffe600', padding: '1px 6px', borderRadius: '8px', fontSize: '11px', backgroundColor: 'rgba(0,0,0,0.5)' }}>완료됨</span>)}
             </span>
             
-            <h1 style={{ 
-                color: isSuccess ? '#00ffff' : '#ffffff', 
-                fontSize: '18px', 
-                fontWeight: '900', 
-                lineHeight: '1.6', 
-                wordBreak: 'keep-all', 
-                textShadow: isSuccess ? '0 0 40px #00ffff' : '0 0 15px #ffffff, 0 0 5px #000000', 
-                transition: 'all 0.5s ease', 
-                padding: '0 10px' 
-            }}>
-                {currentVerse.text}
-            </h1>
+            {/* ★ NEW: 렌더링 함수로 대체 */}
+            {renderVerseText()} 
+            
         </div>
+        
+        {/* 입력창 + 마이크 버튼 */}
         {!loading && (
-            <input type="text" value={inputText} onChange={handleInputChange} onKeyDown={handleKeyDown} placeholder="말씀을 입력하고 Enter" spellCheck="false" style={{ pointerEvents: 'auto', width: '100%', padding: '15px', fontSize: '16px', borderRadius: '15px', border: '2px solid rgba(255,255,255,0.3)', background: 'rgba(0, 0, 0, 0.4)', color: '#ffe600', outline: 'none', textAlign: 'center', boxShadow: '0 15px 40px rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', transition: 'border-color 0.3s, box-shadow 0.3s' }} onFocus={(e) => { e.target.style.borderColor = '#ffe600'; e.target.style.boxShadow = '0 0 30px rgba(255, 230, 0, 0.3)'; }} onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.3)'; e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.6)'; }} />
+            <div style={{ display: 'flex', width: '100%', maxWidth: '1000px', margin: '0 auto', pointerEvents: 'auto' }}>
+                <input 
+                    ref={inputRef}
+                    type="text" value={inputText} onChange={handleInputChange} onKeyDown={handleKeyDown} 
+                    placeholder="말씀을 입력하고 Enter" spellCheck="false" 
+                    style={{ 
+                        flexGrow: 1, padding: '15px', fontSize: '16px', borderRadius: '15px 0 0 15px', border: '2px solid rgba(255,255,255,0.3)', 
+                        background: 'rgba(0, 0, 0, 0.4)', color: '#ffe600', outline: 'none', textAlign: 'center', 
+                        boxShadow: '0 15px 40px rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', 
+                        borderRight: 'none',
+                        transition: 'border-color 0.3s, box-shadow 0.3s' 
+                    }} 
+                    onFocus={(e) => { e.target.style.borderColor = '#ffe600'; e.target.style.boxShadow = '0 0 30px rgba(255, 230, 0, 0.3)'; }} 
+                    onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.3)'; e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.6)'; }} 
+                />
+                
+                {/* 마이크 버튼 */}
+                <button 
+                    onClick={startListening}
+                    style={{
+                        background: 'rgba(255, 230, 0, 0.9)', color: 'black', border: 'none', 
+                        padding: '0 15px', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold',
+                        borderRadius: '0 15px 15px 0', boxShadow: '0 15px 40px rgba(0,0,0,0.6)',
+                        border: '2px solid #ffe600', borderLeft: 'none',
+                    }}
+                >
+                    🎤
+                </button>
+            </div>
         )}
       </div>
     </div>
