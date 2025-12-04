@@ -11,9 +11,26 @@ declare global {
 }
 
 // ==============================================================================
-// ★ 배경 이미지 URL을 더 안정적인 새 주소로 변경했습니다!
+// ★ 1. 이미지 파일 목록 (여기를 캡틴의 파일 이름으로 채워주세요!)
 // ==============================================================================
-const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1536440136659-1e3a35071728?auto=format&fit=crop&q=80&w=1920&h=https://images.unsplash.com/photo-1436891620584-47fd0e565afb?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D1080"; 
+const LOCAL_BACKGROUNDS = [
+  '/backgrounds/back1.jpg', 
+  '/backgrounds/back2.jpg',
+  '/backgrounds/back3.jpg',
+  '/backgrounds/back4.jpg',
+  '/backgrounds/back5.jpg',
+  '/backgrounds/back6.jpg',
+  '/backgrounds/back7.jpg',
+  '/backgrounds/back8.jpg',
+  '/backgrounds/back9.jpg',
+  '/backgrounds/back10.jpg',
+  '/backgrounds/back11.jpg',
+  // 여기에 파일 이름을 계속 추가하세요!
+];
+
+// 2. 목록 중 하나를 랜덤으로 선택하여 URL 확정
+const BACKGROUND_IMAGE_URL = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
+// ==============================================================================
 
 type BibleVerse = {
   ref: string; text: string; book: string; chapter: number; verse: number;
@@ -86,7 +103,6 @@ export default function Home() {
 
     recognition.start();
 
-    // 마이크 수동 종료 기능 추가 (Enter로 인식 종료)
     const handleStop = (e: KeyboardEvent) => {
         if (e.key === 'Enter') {
             recognition.stop();
@@ -221,17 +237,10 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !loading) {
-        // 음성 인식이 켜져있을 경우에도 Enter로 정지 후 비교
-        // Clean input/target for comparison
         const cleanInput = inputText.trim().replace(/\s+/g, '');
         const cleanTarget = currentVerse.text.trim().replace(/\s+/g, '');
-
-        if (cleanInput === cleanTarget) {
-            handleSuccess(currentVerse.ref);
-        } else { 
-            playSound('error'); 
-            alert("틀렸습니다. 오타를 확인해보세요!"); 
-        }
+        if (cleanInput === cleanTarget) handleSuccess(currentVerse.ref);
+        else { playSound('error'); alert("틀렸습니다. 오타를 확인해보세요!"); }
     }
   };
 
