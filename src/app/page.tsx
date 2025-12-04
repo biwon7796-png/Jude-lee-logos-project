@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
-// ★ 배경 이미지 설정
+// 배경 이미지
 const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
 
 type BibleVerse = {
@@ -15,23 +15,19 @@ export default function Home() {
   const engineRef = useRef<Matter.Engine | null>(null);
   const bodiesRef = useRef<Matter.Body[]>([]); 
 
-  // 데이터 상태
   const [allVerses, setAllVerses] = useState<BibleVerse[]>([]);
   const [activeVerses, setActiveVerses] = useState<BibleVerse[]>([]);
   
-  // 선택 옵션
   const [bookList, setBookList] = useState<string[]>([]);
   const [chapterList, setChapterList] = useState<number[]>([]);
   const [selectedBook, setSelectedBook] = useState("");
   const [selectedChapter, setSelectedChapter] = useState(0);
 
-  // 진행 상태
   const [verseIndex, setVerseIndex] = useState(0);
   const [inputText, setInputText] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // 완료 기록 & 테이블
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
   const [showTable, setShowTable] = useState(false);
 
@@ -47,7 +43,6 @@ export default function Home() {
     } catch (e) {}
   };
 
-  // 1. 초기 로딩
   useEffect(() => {
     const savedCompleted = localStorage.getItem('logos_completed');
     if (savedCompleted) setCompletedSet(new Set(JSON.parse(savedCompleted)));
@@ -88,7 +83,6 @@ export default function Home() {
       .catch(err => { console.error(err); setLoading(false); });
   }, []);
 
-  // 2. 책 선택 -> 장 목록 갱신
   useEffect(() => {
     if (!selectedBook) return;
     const versesInBook = allVerses.filter(v => v.book === selectedBook);
@@ -98,32 +92,27 @@ export default function Home() {
     localStorage.setItem('logos_last_book', selectedBook);
   }, [selectedBook, allVerses]);
 
-  // 3. 장 선택 -> 필사 목록 갱신 & 시작 위치 잡기
   useEffect(() => {
     if (!selectedBook || !selectedChapter) return;
     localStorage.setItem('logos_last_chapter', selectedChapter.toString());
-
-    const targetVerses = allVerses.filter(v => 
-        v.book === selectedBook && v.chapter === selectedChapter
-    ).sort((a, b) => a.verse - b.verse);
-
+    const targetVerses = allVerses.filter(v => v.book === selectedBook && v.chapter === selectedChapter).sort((a, b) => a.verse - b.verse);
     setActiveVerses(targetVerses);
-
-    // ★ 완료하지 않은 첫 번째 절로 이동
     const firstIncompleteIndex = targetVerses.findIndex(v => !completedSet.has(v.ref));
     setVerseIndex(firstIncompleteIndex !== -1 ? firstIncompleteIndex : 0);
     setInputText("");
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBook, selectedChapter, allVerses]); 
+  }, [selectedBook, selectedChapter, allVerses]);
 
-  // 4. 물리 엔진
   useEffect(() => {
     const initPhysics = async () => {
       if (typeof window === 'undefined') return;
       try {
+        // ★★★ 여기가 수정되었습니다! (에러 무시 코드 추가) ★★★
+        // @ts-ignore
         await import('pathseg');
+        // @ts-ignore
         const decomp = await import('poly-decomp');
+        
         const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner, Bodies = Matter.Bodies, Composite = Matter.Composite, Mouse = Matter.Mouse, MouseConstraint = Matter.MouseConstraint, Common = Matter.Common;
         Common.setDecomp(decomp.default || decomp);
         if (engineRef.current) return;
@@ -172,7 +161,6 @@ export default function Home() {
     localStorage.setItem('logos_completed', JSON.stringify(Array.from(newSet)));
 
     setInputText("");
-    
     setTimeout(() => {
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
@@ -235,17 +223,13 @@ export default function Home() {
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url('${BACKGROUND_IMAGE_URL}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3 }} />
       <div ref={sceneRef} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
-
       <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
-      
       {renderReadingTable()}
-      
       <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translate(-50%, 0)', zIndex: 20, display: 'flex', gap: '15px', background: 'rgba(0,0,0,0.6)', padding: '10px 20px', borderRadius: '30px', border: '1px solid #333', backdropFilter: 'blur(5px)' }}>
         <select value={selectedBook} onChange={(e) => setSelectedBook(e.target.value)} style={{ background: 'transparent', color: 'white', border: 'none', fontSize: '16px', outline: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{bookList.map(book => <option key={book} value={book} style={{color:'black'}}>{book}</option>)}</select>
         <span style={{color:'#666'}}>|</span>
         <select value={selectedChapter} onChange={(e) => setSelectedChapter(Number(e.target.value))} style={{ background: 'transparent', color: '#ffe600', border: 'none', fontSize: '16px', outline: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{chapterList.map(ch => <option key={ch} value={ch} style={{color:'black'}}>{ch}장</option>)}</select>
       </div>
-
       <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, textAlign: 'center', width: '95%', maxWidth: '1000px', pointerEvents: 'none' }}>
         <div style={{ marginBottom: '50px' }}>
             <span style={{ color: '#ffffff', fontSize: '16px', letterSpacing: '3px', display: 'block', marginBottom: '20px', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
