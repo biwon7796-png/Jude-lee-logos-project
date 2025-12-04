@@ -3,18 +3,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
+// VTT를 위한 타입 선언
 declare global {
   interface Window {
     webkitSpeechRecognition: any;
   }
 }
 
-// ==============================================================================
-// ★ 배경 이미지 URL을 더 안정적인 주소로 변경했습니다.
-// ==============================================================================
-const BACKGROUND_IMAGE_URL = "https://images.pexels.com/photos/347356/pexels-photo-347356.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1200&dpr=1"; 
+// ★★★ 배경 이미지 주소 (여기만 확인하세요!) ★★★
+const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759052-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
 
 type BibleVerse = {
+// ... (나머지 코드는 그대로입니다) ...
   ref: string; text: string; book: string; chapter: number; verse: number;
 };
 
