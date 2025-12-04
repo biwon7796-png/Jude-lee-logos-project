@@ -1,4 +1,3 @@
-// Cache clearing line
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -11,30 +10,44 @@ declare global {
   }
 }
 
-// ==============================================================================
-// ★ 1. 이미지 파일 목록 (여기에 캡틴의 파일 이름을 넣어주세요!)
-// ==============================================================================
+// ============================================================
+// ★ NEW: Levenshtein Distance (문자열 유사도 측정 함수)
+// 오차를 허용하기 위해 사용합니다. (외부 라이브러리 없이 순수 JS로 구현)
+// ============================================================
+const levenshteinDistance = (a: string, b: string): number => {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+            matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,       // deletion
+                matrix[i][j - 1] + 1,       // insertion
+                matrix[i - 1][j - 1] + cost // substitution
+            );
+        }
+    }
+    return matrix[b.length][a.length];
+};
+// ============================================================
 
- const LOCAL_BACKGROUNDS = [
-  '/backgrounds/back1.jpeg', 
-  '/backgrounds/back3.jpeg',
-  '/backgrounds/back4.jpeg',
-  '/backgrounds/back5.jpeg',
-  '/backgrounds/back6.jpeg',
-  '/backgrounds/back7.jpeg',
-  '/backgrounds/back8.jpeg',
-  '/backgrounds/back9.jpeg',
-  '/backgrounds/back10.jpeg',
-];
-
-// 목록 중 하나를 랜덤으로 선택하여 URL 확정
-const BACKGROUND_IMAGE_URL = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
-// ==============================================================================
+// 배경 이미지
+const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759052-fed622ff2c3b?auto=format&fit=crop&w=1920&h=1080";
 
 type BibleVerse = {
   ref: string; text: string; book: string; chapter: number; verse: number;
 };
 
+// ... (Home 컴포넌트 생략)
 export default function Home() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
@@ -209,12 +222,10 @@ export default function Home() {
 
   const triggerHolyEffect = () => {}; 
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputText(e.target.value);
-    playSound('type');
-  };
-
-  const handleSuccess = (verseRef: string) => {
+  // ============================================================
+  // ★ SUCCESS HANDLER: 별도 함수로 분리 (자동 넘김에 사용)
+  // ============================================================
+  const performSuccessAction = (verseRef: string) => {
     playSound('heaven');
     setIsSuccess(true);
     
@@ -234,15 +245,76 @@ export default function Home() {
     }, 300); 
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !loading) {
-        const cleanInput = inputText.trim().replace(/\s+/g, '');
-        const cleanTarget = currentVerse.text.trim().replace(/\s+/g, '');
-        if (cleanInput === cleanTarget) handleSuccess(currentVerse.ref);
-        else { playSound('error'); alert("틀렸습니다. 오타를 확인해보세요!"); }
+
+  // ============================================================
+  // ★ 1. Levenshtein Distance를 이용한 유사도 검사
+  // ============================================================
+  const checkFuzzyMatch = (input: string, target: string): boolean => {
+    const cleanInput = input.trim().replace(/\s+/g, '');
+    const cleanTarget = target.trim().replace(/\s+/g, '');
+
+    if (cleanInput.length < 5 || cleanTarget.length === 0) return false;
+
+    // 최대 허용 오차 (Max Errors)
+    const maxErrors = Math.ceil(cleanTarget.length * 0.05) + 1; // 5% 오차 + 1글자 여유
+
+    // 1. 전체 길이가 맞아야 함 (오차가 너무 크면 실패)
+    if (Math.abs(cleanInput.length - cleanTarget.length) > maxErrors * 2) return false;
+
+    // 2. Levenshtein Distance 계산
+    const distance = levenshteinDistance(cleanInput, cleanTarget);
+    
+    // 3. 오차가 허용치 내인지 확인
+    return distance <= maxErrors; 
+  };
+
+
+  // ============================================================
+  // ★ 2. 입력 감지 함수 (자동 넘김 로직 포함)
+  // ============================================================
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newText = e.target.value;
+    setInputText(newText);
+    playSound('type');
+
+    if (newText.length === 0) return;
+
+    const targetVerseText = currentVerse.text;
+
+    // A. 입력 길이가 타겟 길이보다 크면 즉시 실패 (오버플로우 방지)
+    if (newText.length > targetVerseText.length + 5) {
+        alert("입력 길이가 너무 깁니다. 확인해주세요.");
+        setInputText(targetVerseText.slice(0, targetVerseText.length)); // 강제 자르기
+        return;
+    }
+    
+    // B. 타겟 길이의 90% 이상 입력되었을 때 유사도 검사 시작
+    const matchThreshold = targetVerseText.length * 0.9;
+    
+    if (newText.length >= matchThreshold) {
+        // 음성 인식 오류를 감안하여 Enter 없이 자동 통과 처리
+        if (checkFuzzyMatch(newText, targetVerseText)) {
+            // ★ 통과 시 바로 다음 절로 이동
+            performSuccessAction(currentVerse.ref);
+        }
     }
   };
 
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Enter 키는 VTT 종료 후 수동 확인용으로만 남겨둠
+    if (e.key === 'Enter' && !loading) {
+        // Enter를 눌렀을 때도 유사도 검사를 통해 통과/실패 판정
+        if (checkFuzzyMatch(inputText, currentVerse.text)) {
+            performSuccessAction(currentVerse.ref);
+        } else {
+             playSound('error');
+             alert("글자 수나 내용이 많이 다릅니다. 다시 확인해주세요.");
+        }
+    }
+  };
+
+  // ... (renderVerseText, renderReadingTable, return JSX 생략 - 위와 동일)
   const renderVerseText = () => {
     const targetText = currentVerse.text;
     const typedText = inputText;
@@ -328,19 +400,8 @@ export default function Home() {
 
 
   return (
-    <div style={{ 
-        position: 'relative', 
-        width: '100%', 
-        height: '100vh', 
-        overflow: 'hidden', 
-        fontFamily: 'sans-serif',
-        backgroundColor: '#000000' // ★★★ 추가: 이미지가 안 뜰 때 검은색 배경으로 대체
-    }}>
-      
-      {/* 0층: 배경 이미지 (투명도 50%) */}
+    <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url('${BACKGROUND_IMAGE_URL}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
-      
-      {/* 1층: 물리 엔진 (투명 캔버스) */}
       <div ref={sceneRef} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
 
       <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
