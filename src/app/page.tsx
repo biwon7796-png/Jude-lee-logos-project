@@ -3,14 +3,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
-// VTT를 위한 타입 선언
 declare global {
   interface Window {
     webkitSpeechRecognition: any;
   }
 }
 
-const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759052-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
+// ==============================================================================
+// ★ 배경 이미지 URL을 더 안정적인 주소로 변경했습니다.
+// ==============================================================================
+const BACKGROUND_IMAGE_URL = "https://images.pexels.com/photos/347356/pexels-photo-347356.jpeg?auto=compress&cs=tinysrgb&w=1920&h=1200&dpr=1"; 
 
 type BibleVerse = {
   ref: string; text: string; book: string; chapter: number; verse: number;
@@ -48,6 +50,9 @@ export default function Home() {
     } catch (e) {}
   };
 
+  // ============================================================
+  // ★ VTT (음성 인식) 기능 - 연속 인식 모드
+  // ============================================================
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window)) {
         alert('이 브라우저(권장: Chrome)에서는 음성 인식이 지원되지 않습니다.');
@@ -55,12 +60,12 @@ export default function Home() {
     }
     // @ts-ignore
     const recognition = new window.webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
+    recognition.continuous = true; // ★ 수정: 연속 인식 모드 (마이크가 바로 안 꺼짐)
+    recognition.interimResults = true; 
     recognition.lang = 'ko-KR';
 
     recognition.onstart = () => {
-        if (inputRef.current) inputRef.current.placeholder = "말씀하세요...";
+        if (inputRef.current) inputRef.current.placeholder = "말씀을 길게 말해주세요 (종료: Enter)";
     };
 
     recognition.onresult = (event: any) => {
@@ -72,7 +77,25 @@ export default function Home() {
         if (inputRef.current) inputRef.current.placeholder = "음성 인식이 끝났습니다. Enter를 누르세요";
     };
 
+    recognition.onerror = (event: any) => {
+        console.error("VTT Error:", event.error);
+        if (event.error === 'no-speech') {
+            alert("말씀이 감지되지 않았습니다. 다시 시도해 주세요.");
+        } else if (event.error === 'not-allowed') {
+            alert("마이크 사용 권한이 거부되었습니다. 브라우저 설정을 확인해 주세요.");
+        }
+    };
+
     recognition.start();
+
+    // 마이크 수동 종료 기능 추가 (Enter로 인식 종료)
+    const handleStop = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            recognition.stop();
+            window.removeEventListener('keydown', handleStop);
+        }
+    };
+    window.addEventListener('keydown', handleStop);
   };
 
   // 1. 초기 로딩 및 데이터 파싱
@@ -200,10 +223,17 @@ export default function Home() {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !loading) {
+        // 음성 인식이 켜져있을 경우에도 Enter로 정지 후 비교
+        // Clean input/target for comparison
         const cleanInput = inputText.trim().replace(/\s+/g, '');
         const cleanTarget = currentVerse.text.trim().replace(/\s+/g, '');
-        if (cleanInput === cleanTarget) handleSuccess(currentVerse.ref);
-        else { playSound('error'); alert("틀렸습니다. 오타를 확인해보세요!"); }
+
+        if (cleanInput === cleanTarget) {
+            handleSuccess(currentVerse.ref);
+        } else { 
+            playSound('error'); 
+            alert("틀렸습니다. 오타를 확인해보세요!"); 
+        }
     }
   };
 
@@ -335,7 +365,7 @@ export default function Home() {
                         outline: 'none', 
                         textAlign: 'center', 
                         boxShadow: '0 15px 40px rgba(0,0,0,0.6)', 
-                        borderRight: 'none', // This border is for the clean connection look
+                        borderRight: 'none',
                         transition: 'border-color 0.3s, box-shadow 0.3s' 
                     }} 
                     onFocus={(e) => { e.target.style.borderColor = '#ffe600'; e.target.style.boxShadow = '0 0 30px rgba(255, 230, 0, 0.3)'; }} 
@@ -346,10 +376,10 @@ export default function Home() {
                 <button 
                     onClick={startListening}
                     style={{
-                        background: 'rgba(255, 230, 0, 0.9)', color: 'black', border: '2px solid #ffe600', // Final intended border
+                        background: 'rgba(255, 230, 0, 0.9)', color: 'black', border: '2px solid #ffe600', 
                         padding: '0 15px', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold',
                         borderRadius: '0 15px 15px 0', boxShadow: '0 15px 40px rgba(0,0,0,0.6)',
-                        borderLeft: 'none', // This prevents the double border line
+                        borderLeft: 'none',
                     }}
                 >
                     🎤
