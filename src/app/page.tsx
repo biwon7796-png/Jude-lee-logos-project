@@ -221,26 +221,108 @@ export default function Home() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
+      
+      {/* 배경 이미지 */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url('${BACKGROUND_IMAGE_URL}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.3 }} />
+      
+      {/* 물리 엔진 */}
       <div ref={sceneRef} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
-      <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
+
+      {/* 1. 성경읽기표 버튼 */}
+      <button 
+        onClick={() => setShowTable(true)} 
+        style={{ 
+            position: 'absolute', 
+            top: '20px', 
+            right: '20px', 
+            zIndex: 30, 
+            background: 'rgba(255, 255, 255, 0.9)', 
+            color: '#000', 
+            border: 'none', 
+            padding: '8px 16px', 
+            borderRadius: '30px', 
+            cursor: 'pointer', 
+            fontWeight: 'bold', 
+            fontSize: '14px', 
+            boxShadow: '0 4px 10px rgba(0,0,0,0.3)' 
+        }}
+      >
+        📊 성경읽기표
+      </button>
+      
+      {/* 성경읽기표 팝업 */}
       {renderReadingTable()}
-      <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translate(-50%, 0)', zIndex: 20, display: 'flex', gap: '15px', background: 'rgba(0,0,0,0.6)', padding: '10px 20px', borderRadius: '30px', border: '1px solid #333', backdropFilter: 'blur(5px)' }}>
+      
+      {/* 2. 성경 선택 탭 (아래로 내림) */}
+      <div style={{ 
+          position: 'absolute', 
+          top: '80px', 
+          left: '50%', 
+          transform: 'translate(-50%, 0)', 
+          zIndex: 20, 
+          display: 'flex', 
+          gap: '10px', 
+          background: 'rgba(0,0,0,0.6)', 
+          padding: '8px 20px', 
+          borderRadius: '30px', 
+          border: '1px solid #333', 
+          backdropFilter: 'blur(5px)',
+          width: 'max-content' 
+      }}>
         <select value={selectedBook} onChange={(e) => setSelectedBook(e.target.value)} style={{ background: 'transparent', color: 'white', border: 'none', fontSize: '16px', outline: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{bookList.map(book => <option key={book} value={book} style={{color:'black'}}>{book}</option>)}</select>
         <span style={{color:'#666'}}>|</span>
         <select value={selectedChapter} onChange={(e) => setSelectedChapter(Number(e.target.value))} style={{ background: 'transparent', color: '#ffe600', border: 'none', fontSize: '16px', outline: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{chapterList.map(ch => <option key={ch} value={ch} style={{color:'black'}}>{ch}장</option>)}</select>
       </div>
-      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, textAlign: 'center', width: '95%', maxWidth: '1000px', pointerEvents: 'none' }}>
-        <div style={{ marginBottom: '50px' }}>
-            <span style={{ color: '#ffffff', fontSize: '16px', letterSpacing: '3px', display: 'block', marginBottom: '20px', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
+
+      {/* 3. 말씀 입력창 (글씨 크기 축소) */}
+      <div style={{ position: 'absolute', top: '55%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, textAlign: 'center', width: '95%', maxWidth: '1000px', pointerEvents: 'none' }}>
+        <div style={{ marginBottom: '30px' }}> {/* 여백도 조금 줄임 */}
+            <span style={{ color: '#ffffff', fontSize: '13px', letterSpacing: '2px', display: 'block', marginBottom: '10px', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
                 LOGOS PROJECT : {currentVerse.book} {currentVerse.chapter}:{currentVerse.verse}
-                <span style={{ marginLeft: '15px', color: '#ddd', fontSize: '14px' }}>({verseIndex + 1} / {activeVerses.length})</span>
-                {completedSet.has(currentVerse.ref) && (<span style={{ marginLeft: '10px', color: '#ffe600', border: '1px solid #ffe600', padding: '2px 8px', borderRadius: '10px', fontSize: '12px', backgroundColor: 'rgba(0,0,0,0.5)' }}>완료됨</span>)}
+                <span style={{ marginLeft: '10px', color: '#ddd', fontSize: '12px' }}>({verseIndex + 1} / {activeVerses.length})</span>
+                {completedSet.has(currentVerse.ref) && (<span style={{ marginLeft: '8px', color: '#ffe600', border: '1px solid #ffe600', padding: '1px 6px', borderRadius: '8px', fontSize: '11px', backgroundColor: 'rgba(0,0,0,0.5)' }}>완료됨</span>)}
             </span>
-            <h1 style={{ color: isSuccess ? '#00ffff' : 'white', fontSize: '32px', fontWeight: '700', lineHeight: '1.6', wordBreak: 'keep-all', textShadow: isSuccess ? '0 0 40px #00ffff' : '0 2px 10px rgba(0,0,0,0.8)', transition: 'all 0.5s ease' }}>{currentVerse.text}</h1>
+            
+            {/* ★★★ 여기 크기를 줄였습니다 (24px -> 18px) ★★★ */}
+            <h1 style={{ 
+                color: isSuccess ? '#00ffff' : 'white', 
+                fontSize: '18px', // 모바일에서 보기 편한 크기
+                fontWeight: '700', 
+                lineHeight: '1.6', 
+                wordBreak: 'keep-all', 
+                textShadow: isSuccess ? '0 0 40px #00ffff' : '0 2px 10px rgba(0,0,0,0.8)', 
+                transition: 'all 0.5s ease', 
+                padding: '0 10px' 
+            }}>
+                {currentVerse.text}
+            </h1>
         </div>
         {!loading && (
-            <input type="text" value={inputText} onChange={handleInputChange} onKeyDown={handleKeyDown} placeholder="말씀을 입력하고 Enter를 누르세요" spellCheck="false" style={{ pointerEvents: 'auto', width: '100%', padding: '25px', fontSize: '24px', borderRadius: '15px', border: '2px solid rgba(255,255,255,0.3)', background: 'rgba(0, 0, 0, 0.4)', color: '#ffe600', outline: 'none', textAlign: 'center', boxShadow: '0 15px 40px rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)', transition: 'border-color 0.3s, box-shadow 0.3s' }} onFocus={(e) => { e.target.style.borderColor = '#ffe600'; e.target.style.boxShadow = '0 0 30px rgba(255, 230, 0, 0.3)'; }} onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.3)'; e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.6)'; }} />
+            <input 
+                type="text" 
+                value={inputText} 
+                onChange={handleInputChange} 
+                onKeyDown={handleKeyDown} 
+                placeholder="말씀을 입력하고 Enter" 
+                spellCheck="false" 
+                style={{ 
+                    pointerEvents: 'auto', 
+                    width: '100%', 
+                    padding: '15px', // 패딩도 살짝 줄여서 날렵하게
+                    fontSize: '16px', // 입력 글씨도 20px -> 16px로 조정
+                    borderRadius: '15px', 
+                    border: '2px solid rgba(255,255,255,0.3)', 
+                    background: 'rgba(0, 0, 0, 0.4)', 
+                    color: '#ffe600', 
+                    outline: 'none', 
+                    textAlign: 'center', 
+                    boxShadow: '0 15px 40px rgba(0,0,0,0.6)', 
+                    backdropFilter: 'blur(5px)', 
+                    transition: 'border-color 0.3s, box-shadow 0.3s' 
+                }} 
+                onFocus={(e) => { e.target.style.borderColor = '#ffe600'; e.target.style.boxShadow = '0 0 30px rgba(255, 230, 0, 0.3)'; }} 
+                onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.3)'; e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.6)'; }} 
+            />
         )}
       </div>
     </div>
