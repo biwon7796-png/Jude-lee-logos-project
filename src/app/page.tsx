@@ -16,17 +16,16 @@ declare global {
 // ==============================================================================
 
  const LOCAL_BACKGROUNDS = [
-  '/backgrounds/back1.avif', 
-  '/backgrounds/back2.avif',
-  '/backgrounds/back3.avif',
-  '/backgrounds/back4.avif',
-  '/backgrounds/back5.avif',
-  '/backgrounds/back6.avif',
-  '/backgrounds/back7.avif',
-  '/backgrounds/back8.avif',
-  '/backgrounds/back9.avif',
-  '/backgrounds/back10.avif',
-  '/backgrounds/back11.avif',
+  '/backgrounds/back1.jpg', 
+  '/backgrounds/back3.jpg',
+  '/backgrounds/back4.jpg',
+  '/backgrounds/back5.jpg',
+  '/backgrounds/back6.jpg',
+  '/backgrounds/back7.jpg',
+  '/backgrounds/back8.jpg',
+  '/backgrounds/back9.jpg',
+  '/backgrounds/back10.jpg',
+  '/backgrounds/back11.jpg',
 ];
 
 // 목록 중 하나를 랜덤으로 선택하여 URL 확정
