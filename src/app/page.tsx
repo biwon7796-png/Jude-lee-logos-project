@@ -330,8 +330,19 @@ export default function Home() {
 
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
+    <div style={{ 
+        position: 'relative', 
+        width: '100%', 
+        height: '100vh', 
+        overflow: 'hidden', 
+        fontFamily: 'sans-serif',
+        backgroundColor: '#000000' // ★★★ 추가: 이미지가 안 뜰 때 검은색 배경으로 대체
+    }}>
+      
+      {/* 0층: 배경 이미지 (투명도 50%) */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url('${BACKGROUND_IMAGE_URL}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
+      
+      {/* 1층: 물리 엔진 (투명 캔버스) */}
       <div ref={sceneRef} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
 
       <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
