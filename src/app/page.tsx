@@ -10,11 +10,12 @@ declare global {
   }
 }
 
-// ★★★ 배경 이미지 주소 (여기만 확인하세요!) ★★★
-const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759052-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80";
+// ==============================================================================
+// ★ 배경 이미지 URL을 더 안정적인 새 주소로 변경했습니다!
+// ==============================================================================
+const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1536440136659-1e3a35071728?auto=format&fit=crop&q=80&w=1920&h=https://images.unsplash.com/photo-1436891620584-47fd0e565afb?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D1080"; 
 
 type BibleVerse = {
-// ... (나머지 코드는 그대로입니다) ...
   ref: string; text: string; book: string; chapter: number; verse: number;
 };
 
@@ -50,9 +51,6 @@ export default function Home() {
     } catch (e) {}
   };
 
-  // ============================================================
-  // ★ VTT (음성 인식) 기능 - 연속 인식 모드
-  // ============================================================
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window)) {
         alert('이 브라우저(권장: Chrome)에서는 음성 인식이 지원되지 않습니다.');
@@ -60,7 +58,7 @@ export default function Home() {
     }
     // @ts-ignore
     const recognition = new window.webkitSpeechRecognition();
-    recognition.continuous = true; // ★ 수정: 연속 인식 모드 (마이크가 바로 안 꺼짐)
+    recognition.continuous = true; 
     recognition.interimResults = true; 
     recognition.lang = 'ko-KR';
 
