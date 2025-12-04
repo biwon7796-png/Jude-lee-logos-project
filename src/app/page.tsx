@@ -4,44 +4,29 @@ import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
 // VTT를 위한 타입 선언
-declare global {
-  interface Window {
-    webkitSpeechRecognition: any;
-  }
-}
+// src/app/page.tsx 맨 윗부분 (VTT 타입 선언 아래)
 
-// ============================================================
-// ★ NEW: Levenshtein Distance (문자열 유사도 측정 함수)
-// 오차를 허용하기 위해 사용합니다. (외부 라이브러리 없이 순수 JS로 구현)
-// ============================================================
-const levenshteinDistance = (a: string, b: string): number => {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
-    
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) {
-        matrix[i] = [i];
-    }
-    for (let j = 0; j <= a.length; j++) {
-        matrix[0][j] = j;
-    }
-    
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            const cost = a[j - 1] === b[i - 1] ? 0 : 1;
-            matrix[i][j] = Math.min(
-                matrix[i - 1][j] + 1,       // deletion
-                matrix[i][j - 1] + 1,       // insertion
-                matrix[i - 1][j - 1] + cost // substitution
-            );
-        }
-    }
-    return matrix[b.length][a.length];
-};
-// ============================================================
+// ==============================================================================
+// ★ 1. 이미지 파일 목록 (JPG 파일 11개)
+// ==============================================================================
+const LOCAL_BACKGROUNDS = [
+  // 캡틴의 파일 이름과 확장자를 정확히 적어주세요! (JPG로 가정합니다)
+  '/backgrounds/back1.jpg', 
+  '/backgrounds/back2.jpg',
+  '/backgrounds/back3.jpg',
+  '/backgrounds/back4.jpg',
+  '/backgrounds/back5.jpg',
+  '/backgrounds/back6.jpg',
+  '/backgrounds/back7.jpg',
+  '/backgrounds/back8.jpg',
+  '/backgrounds/back9.jpg',
+  '/backgrounds/back10.jpg',
+  '/backgrounds/back11.jpg',
+];
 
-// 배경 이미지
-const BACKGROUND_IMAGE_URL = "https://images.unsplash.com/photo-1464822759052-fed622ff2c3b?auto=format&fit=crop&w=1920&h=1080";
+// 목록 중 하나를 랜덤으로 선택하여 URL 확정
+const BACKGROUND_IMAGE_URL = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
+// ==============================================================================
 
 type BibleVerse = {
   ref: string; text: string; book: string; chapter: number; verse: number;
