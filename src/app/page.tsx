@@ -11,17 +11,16 @@ import Matter from 'matter-js';
 // ==============================================================================
 const LOCAL_BACKGROUNDS = [
   // 캡틴의 파일 이름과 확장자를 정확히 적어주세요! (JPG로 가정합니다)
-  '/backgrounds/back1.jpg', 
-  '/backgrounds/back2.jpg',
-  '/backgrounds/back3.jpg',
-  '/backgrounds/back4.jpg',
-  '/backgrounds/back5.jpg',
-  '/backgrounds/back6.jpg',
-  '/backgrounds/back7.jpg',
-  '/backgrounds/back8.jpg',
-  '/backgrounds/back9.jpg',
-  '/backgrounds/back10.jpg',
-  '/backgrounds/back11.jpg',
+  '/backgrounds/back1.jpeg', 
+  '/backgrounds/back2.jpeg',
+  '/backgrounds/back3.jpeg',
+  '/backgrounds/back4.jpeg',
+  '/backgrounds/back5.jpeg',
+  '/backgrounds/back6.jpeg',
+  '/backgrounds/back7.jpeg',
+  '/backgrounds/back8.jpeg',
+  '/backgrounds/back9.jpeg',
+  '/backgrounds/back10.jpeg',
 ];
 
 // 목록 중 하나를 랜덤으로 선택하여 URL 확정
