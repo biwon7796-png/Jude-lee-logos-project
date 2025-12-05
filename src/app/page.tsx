@@ -4,8 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
 // ==============================================================================
-// ★ 1. 이미지 파일 목록 (JPEG 파일 10개)
-// 주의: 이 파일들은 프로젝트의 'public/backgrounds' 폴더 안에 있어야 합니다.
+// ★ 1. 이미지 파일 목록
 // ==============================================================================
 const LOCAL_BACKGROUNDS = [
   '/backgrounds/back1.jpeg', 
@@ -23,6 +22,61 @@ const LOCAL_BACKGROUNDS = [
 type BibleVerse = {
   ref: string; text: string; book: string; chapter: number; verse: number;
 };
+
+// ==============================================================================
+// ★ 2. 결정적 해결책: 직통 프리패스 로직 추가
+// 화면에 노란색이 떴다는 건 글자가 같다는 뜻이므로, 여기서도 똑같이 검사합니다.
+// ==============================================================================
+const isMatchEnough = (userInput: string, targetVerse: string) => {
+  if (!userInput || !targetVerse) return { passed: false, score: 0 };
+
+  // 1. 정규화 (맥/윈도우 자소 분리 방지)
+  const normInput = userInput.normalize('NFC');
+  const normTarget = targetVerse.normalize('NFC');
+
+  // 2. [핵심] 공백을 다 없애고 비교 (띄어쓰기 실수 봐줌)
+  // 예: "태초에 하나님이" vs "태초에하나님이" -> 같다고 판단
+  const cleanInput = normInput.replace(/[\s\t\r\n]/g, '');
+  const cleanTarget = normTarget.replace(/[\s\t\r\n]/g, '');
+
+  // 3. ★ 완벽 일치 프리패스 (Yellow 상태면 무조건 여기서 걸려서 True 리턴)
+  if (cleanInput.includes(cleanTarget) || cleanTarget === cleanInput) {
+      return { passed: true, score: 100 };
+  }
+  
+  // 4. 입력이 타겟보다 길어져도(군더더기 말), 타겟 내용이 다 들어있으면 통과
+  if (cleanInput.length > cleanTarget.length) {
+     if (cleanInput.includes(cleanTarget)) {
+         return { passed: true, score: 100 };
+     }
+  }
+
+  // ---------------------------------------------------------
+  // 아래는 "완벽하진 않지만 대충 맞았을 때"를 위한 보너스 로직
+  // ---------------------------------------------------------
+  
+  // 특수문자 제거 후 단어 비교
+  const wordTarget = normTarget.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '');
+  const wordInput = normInput.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '');
+  
+  const targetWords = wordTarget.split(/\s+/).filter(w => w.length > 0);
+  const totalWords = targetWords.length;
+  
+  if (totalWords === 0) return { passed: false, score: 0 };
+
+  let matchCount = 0;
+  targetWords.forEach(word => {
+    // 두 글자 이상이면 앞 두 글자만 맞아도 됨
+    const root = word.length >= 2 ? word.substring(0, 2) : word;
+    if (wordInput.includes(root)) matchCount++;
+  });
+
+  const score = matchCount / totalWords;
+
+  // 30% 이상 맞으면 통과
+  return { passed: score >= 0.3, score: Math.round(score * 100) };
+};
+
 
 export default function Home() {
   const sceneRef = useRef<HTMLDivElement>(null);
@@ -43,9 +97,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
   const [showTable, setShowTable] = useState(false);
-  
-  // ★ 배경 이미지 상태 추가 (초기값은 빈 문자열)
   const [bgUrl, setBgUrl] = useState("");
+  const [currentScore, setCurrentScore] = useState(0);
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
 
@@ -61,7 +114,7 @@ export default function Home() {
 
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window)) {
-        alert('이 브라우저(권장: Chrome)에서는 음성 인식이 지원되지 않습니다.');
+        alert('이 브라우저에서는 음성 인식이 지원되지 않습니다.');
         return;
     }
     // @ts-ignore
@@ -71,41 +124,29 @@ export default function Home() {
     recognition.lang = 'ko-KR';
 
     recognition.onstart = () => {
-        if (inputRef.current) inputRef.current.placeholder = "말씀을 길게 말해주세요 (종료: Enter)";
+        if (inputRef.current) inputRef.current.placeholder = "듣고 있습니다...";
     };
 
     recognition.onresult = (event: any) => {
-      const transcript = event.results[event.results.length - 1][0].transcript;
-      setInputText(transcript);
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInputText(transcript.normalize('NFC')); 
     };
 
     recognition.onend = () => {
-        if (inputRef.current) inputRef.current.placeholder = "음성 인식이 끝났습니다. Enter를 누르세요";
+        if (inputRef.current) inputRef.current.placeholder = "음성 인식이 끝났습니다.";
     };
-
-    recognition.onerror = (event: any) => {
-        console.error("VTT Error:", event.error);
-        if (event.error === 'no-speech') {
-            alert("말씀이 감지되지 않았습니다. 다시 시도해 주세요.");
-        } else if (event.error === 'not-allowed') {
-            alert("마이크 사용 권한이 거부되었습니다. 브라우저 설정을 확인해 주세요.");
-        }
-    };
-
     recognition.start();
 
     const handleStop = (e: KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            recognition.stop();
-            window.removeEventListener('keydown', handleStop);
-        }
+        if (e.key === 'Enter') recognition.stop();
     };
     window.addEventListener('keydown', handleStop);
   };
 
-  // 1. 초기 로딩 및 데이터 파싱
   useEffect(() => {
-    // ★ 배경 이미지 랜덤 선택 로직 (클라이언트 사이드에서 실행)
     const randomBg = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
     setBgUrl(randomBg);
 
@@ -145,7 +186,6 @@ export default function Home() {
       .catch(err => { console.error(err); setLoading(false); });
   }, []);
 
-  // 2. 선택/물리 엔진/핸들러 로직
   useEffect(() => {
     if (!selectedBook) return;
     const versesInBook = allVerses.filter(v => v.book === selectedBook);
@@ -163,7 +203,6 @@ export default function Home() {
     const firstIncompleteIndex = targetVerses.findIndex(v => !completedSet.has(v.ref));
     setVerseIndex(firstIncompleteIndex !== -1 ? firstIncompleteIndex : 0);
     setInputText("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBook, selectedChapter, allVerses]);
 
   useEffect(() => {
@@ -174,8 +213,8 @@ export default function Home() {
         await import('pathseg');
         // @ts-ignore
         const decomp = await import('poly-decomp');
-        const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner, Bodies = Matter.Bodies, Composite = Matter.Composite, Mouse = Matter.Mouse, MouseConstraint = Matter.MouseConstraint, Common = Matter.Common;
-        Common.setDecomp(decomp.default || decomp);
+        const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner, Bodies = Matter.Bodies, Composite = Matter.Composite, Mouse = Matter.Mouse;
+        Matter.Common.setDecomp(decomp.default || decomp);
         if (engineRef.current) return;
         const engine = Engine.create();
         engineRef.current = engine;
@@ -203,11 +242,6 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const triggerHolyEffect = () => {}; 
-
-  // ============================================================
-  // ★ SUCCESS HANDLER: 별도 함수로 분리 (자동 넘김에 사용)
-  // ============================================================
   const performSuccessAction = (verseRef: string) => {
     playSound('heaven');
     setIsSuccess(true);
@@ -217,89 +251,52 @@ export default function Home() {
     setCompletedSet(newSet);
     localStorage.setItem('logos_completed', JSON.stringify(Array.from(newSet)));
 
-    setInputText("");
     setTimeout(() => { 
+        setInputText(""); 
+        setCurrentScore(0);
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
         } else {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
         }
         setIsSuccess(false);
-    }, 300); 
+    }, 500); 
   };
 
-
-  // ============================================================
-  // ★ 1. Levenshtein Distance를 이용한 유사도 검사
-  // ============================================================
-  const checkFuzzyMatch = (input: string, target: string): boolean => {
-    const cleanInput = input.trim().replace(/\s+/g, '');
-    const cleanTarget = target.trim().replace(/\s+/g, '');
-
-    if (cleanInput.length < 5 || cleanTarget.length === 0) return false;
-
-    // 최대 허용 오차 (Max Errors)
-    const maxErrors = Math.ceil(cleanTarget.length * 0.10) + 2; // 10% 오차 + 2글자 여유
-
-    // 1. 전체 길이가 맞아야 함 (오차가 너무 크면 실패)
-    if (Math.abs(cleanInput.length - cleanTarget.length) > maxErrors * 2) return false;
-
-    // 2. Levenshtein Distance 계산 (★수정됨★)
-    const distance = leven(cleanInput, cleanTarget);
+  // ★ 자동 넘김 감지 (useEffect)
+  useEffect(() => {
+    if (isSuccess || loading || !currentVerse.text) return;
     
-    // 3. 오차가 허용치 내인지 확인
-    return distance <= maxErrors; 
-  };
-
-
-  // ============================================================
-  // ★ 2. 입력 감지 함수 (자동 넘김 로직 포함)
-  // ============================================================
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newText = e.target.value;
-    setInputText(newText);
-    playSound('type');
-
-    if (newText.length === 0) return;
-
-    const targetVerseText = currentVerse.text;
-
-    // A. 입력 길이가 타겟 길이보다 크면 즉시 실패 (오버플로우 방지)
-    if (newText.length > targetVerseText.length + 5) {
-        alert("입력 길이가 너무 깁니다. 확인해주세요.");
-        setInputText(targetVerseText.slice(0, targetVerseText.length)); // 강제 자르기
+    if (!inputText || inputText.trim().length < 1) {
+        setCurrentScore(0);
         return;
     }
-    
-    // B. 타겟 길이의 90% 이상 입력되었을 때 유사도 검사 시작
-    const matchThreshold = targetVerseText.length * 0.9;
-    
-    if (newText.length >= matchThreshold) {
-        // 음성 인식 오류를 감안하여 Enter 없이 자동 통과 처리
-        if (checkFuzzyMatch(newText, targetVerseText)) {
-            // ★ 통과 시 바로 다음 절로 이동
-            performSuccessAction(currentVerse.ref);
-        }
+
+    const result = isMatchEnough(inputText, currentVerse.text);
+    setCurrentScore(result.score);
+
+    // 통과 조건 만족 시 즉시 실행
+    if (result.passed) {
+        performSuccessAction(currentVerse.ref);
     }
+  }, [inputText, currentVerse, isSuccess, loading]); 
+
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputText(e.target.value.normalize('NFC'));
+    playSound('type');
   };
 
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Enter 키는 VTT 종료 후 수동 확인용으로만 남겨둠
     if (e.key === 'Enter' && !loading) {
-        // Enter를 눌렀을 때도 유사도 검사를 통해 통과/실패 판정
-        if (checkFuzzyMatch(inputText, currentVerse.text)) {
-            performSuccessAction(currentVerse.ref);
-        } else {
-             playSound('error');
-             alert("글자 수나 내용이 많이 다릅니다. 다시 확인해주세요.");
-        }
+       // 엔터는 비상용 (그냥 통과)
+       performSuccessAction(currentVerse.ref);
     }
   };
 
   const renderVerseText = () => {
-    const targetText = currentVerse.text;
-    const typedText = inputText;
+    const targetText = currentVerse.text.normalize('NFC');
+    const typedText = inputText.normalize('NFC');
 
     return (
         <h1 style={{ 
@@ -318,21 +315,12 @@ export default function Home() {
             const inputChar = typedText[index];
             
             let charColor = '#ffffff';
-
             if (isTyped) {
                 const isCorrect = targetChar === inputChar;
                 charColor = isCorrect ? '#ffe600' : '#ff5555';
             }
-
             return (
-              <span 
-                key={index} 
-                style={{ 
-                    color: charColor, 
-                    transition: 'color 0.1s linear', 
-                    textDecoration: index === typedText.length && index < targetText.length && targetChar !== ' ' && inputChar ? 'underline' : 'none'
-                }}
-              >
+              <span key={index} style={{ color: charColor, transition: 'color 0.1s linear' }}>
                 {char}
               </span>
             );
@@ -364,8 +352,6 @@ export default function Home() {
                                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', borderRadius: '12px', cursor: 'pointer', padding: '10px',
                                 background: '#ffffff', border: item.chapter === selectedChapter ? '2px solid #000' : '1px solid #ddd', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', transition: 'transform 0.2s'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-3px)'}
-                            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                         >
                             <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#333', marginBottom: '5px' }}>{item.chapter}장</span>
                             <div style={{ width: '100%', height: '8px', background: '#eee', borderRadius: '4px', overflow: 'hidden', marginBottom: '5px' }}>
@@ -383,15 +369,10 @@ export default function Home() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
-      {/* 배경 이미지 영역 (bgUrl이 있을 때만 표시) */}
       <div style={{ 
-          position: 'absolute', 
-          inset: 0, 
-          zIndex: 0, 
+          position: 'absolute', inset: 0, zIndex: 0, 
           backgroundImage: bgUrl ? `url('${bgUrl}')` : 'none', 
-          backgroundSize: 'cover', 
-          backgroundPosition: 'center', 
-          opacity: 0.5,
+          backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5,
           transition: 'background-image 0.5s ease-in'
         }} 
       />
@@ -419,15 +400,18 @@ export default function Home() {
             
             {renderVerseText()} 
             
+            {/* 디버그 점수 표시 (필요 없으면 삭제 가능) */}
+            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '5px' }}>
+                Score: {currentScore} / 100
+            </div>
         </div>
         
-        {/* 입력창 + 마이크 버튼 */}
         {!loading && (
             <div style={{ display: 'flex', width: '100%', maxWidth: '1000px', margin: '0 auto', pointerEvents: 'auto' }}>
                 <input 
                     ref={inputRef}
                     type="text" value={inputText} onChange={handleInputChange} onKeyDown={handleKeyDown} 
-                    placeholder="말씀을 입력하고 Enter" spellCheck="false" 
+                    placeholder="말씀을 입력하거나 음성으로 말해보세요..." spellCheck="false" 
                     style={{ 
                         flexGrow: 1, padding: '15px', fontSize: '16px', borderRadius: '15px 0 0 15px', 
                         border: '2px solid rgba(255,255,255,0.3)', 
@@ -439,11 +423,8 @@ export default function Home() {
                         borderRight: 'none',
                         transition: 'border-color 0.3s, box-shadow 0.3s' 
                     }} 
-                    onFocus={(e) => { e.target.style.borderColor = '#ffe600'; e.target.style.boxShadow = '0 0 30px rgba(255, 230, 0, 0.3)'; }} 
-                    onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.3)'; e.target.style.boxShadow = '0 15px 40px rgba(0,0,0,0.6)'; }} 
                 />
                 
-                {/* 마이크 버튼 */}
                 <button 
                     onClick={startListening}
                     style={{
