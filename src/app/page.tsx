@@ -328,11 +328,9 @@ export default function Home() {
                 const isTyped = index < typedText.length;
                 const targetChar = targetText[index];
                 const inputChar = typedText[index];
-                let charColor = '#ffffff'; // 기본 흰색
-                
+                let charColor = '#ffffff';
                 if (isTyped) {
                     const isCorrect = targetChar === inputChar;
-                    // ★ 핵심 변경: 맞으면 노랑(#ffe600), 틀려도 흰색(#ffffff)으로 유지
                     charColor = isCorrect ? '#ffe600' : '#ffffff';
                 }
                 return <span key={index} style={{ color: charColor, transition: 'color 0.1s linear' }}>{char}</span>;
@@ -397,13 +395,14 @@ export default function Home() {
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       {/* Version Check Label */}
       <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, color: 'rgba(255,255,255,0.5)', fontSize: '12px', pointerEvents: 'none' }}>
-        Ver 9.1 (오답 표시 제거)
+        Ver 9.1 (배경 투명도 제거)
       </div>
 
       <div style={{ 
           position: 'absolute', inset: 0, zIndex: 0, 
           backgroundImage: bgUrl ? `url('${bgUrl}')` : 'none', 
-          backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5,
+          // ★ [핵심 변경] opacity: 0.5 제거함
+          backgroundSize: 'cover', backgroundPosition: 'center',
           transition: 'background-image 0.5s ease-in'
         }} 
       />
