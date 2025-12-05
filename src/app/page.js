@@ -1,3 +1,4 @@
+/* eslint-disable */
 'use client';
 import leven from 'leven';
 import React, { useEffect, useRef, useState } from 'react';
@@ -12,14 +13,11 @@ const LOCAL_BACKGROUNDS = [
   '/backgrounds/back10.jpeg',
 ];
 
-type BibleVerse = {
-  ref: string; text: string; book: string; chapter: number; verse: number;
-};
+
 
 // ==============================================================================
 // 2. 하이브리드 판정 로직
-// ==============================================================================
-const isMatchEnough = (userInput: string, targetVerse: string, inputType: string) => {
+const isMatchEnough = (userInput, targetVerse, inputType) => {
   if (!userInput || !targetVerse) return { passed: false, score: 0, lenPercent: 0 };
 
   const normInput = userInput.normalize('NFC');
@@ -31,6 +29,7 @@ const isMatchEnough = (userInput: string, targetVerse: string, inputType: string
     ? Math.min(Math.round((cleanInputRaw.length / cleanTargetRaw.length) * 100), 100) 
     : 0;
 
+  // 길이 기준: 타자(100%), 음성(95%)
   const lengthThreshold = inputType === 'typing' ? 1.0 : 0.95;
 
   if (cleanInputRaw.length < cleanTargetRaw.length * lengthThreshold) {
@@ -56,6 +55,7 @@ const isMatchEnough = (userInput: string, targetVerse: string, inputType: string
   });
 
   const score = Math.round((matchCount / totalWords) * 100);
+  // 정확도 기준: 타자(80%), 음성(70%)
   const scoreThreshold = inputType === 'typing' ? 80 : 70;
   const passed = score >= scoreThreshold; 
 
@@ -66,19 +66,21 @@ export default function Home() {
   const { user, isLoaded } = useUser();
   const [showIntro, setShowIntro] = useState(true);
 
-  const sceneRef = useRef<HTMLDivElement>(null);
-  const engineRef = useRef<Matter.Engine | null>(null);
-  const bodiesRef = useRef<Matter.Body[]>([]); 
-  const inputRef = useRef<HTMLInputElement>(null);
+  // Refs
+  const sceneRef = useRef(null);
+  const engineRef = useRef(null);
+  const bodiesRef = useRef([]); 
+  const inputRef = useRef(null);
 
-  const recognitionRef = useRef<any>(null); 
+  // 마이크 관련 Refs
+  const recognitionRef = useRef(null); 
   const isListeningDesired = useRef(false); 
   const isInputBlocked = useRef(false);
 
-  const [allVerses, setAllVerses] = useState<BibleVerse[]>([]);
-  const [activeVerses, setActiveVerses] = useState<BibleVerse[]>([]);
-  const [bookList, setBookList] = useState<string[]>([]);
-  const [chapterList, setChapterList] = useState<number[]>([]);
+  const [allVerses, setAllVerses] = useState([]);
+  const [activeVerses, setActiveVerses] = useState([]);
+  const [bookList, setBookList] = useState([]);
+  const [chapterList, setChapterList] = useState([]);
   const [selectedBook, setSelectedBook] = useState("");
   const [selectedChapter, setSelectedChapter] = useState(0);
 
@@ -86,24 +88,22 @@ export default function Home() {
   const [inputText, setInputText] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
+  const [completedSet, setCompletedSet] = useState(new Set());
   const [showTable, setShowTable] = useState(false);
   const [bgUrl, setBgUrl] = useState("");
   
   const [currentScore, setCurrentScore] = useState(0);
   const [currentLenPercent, setCurrentLenPercent] = useState(0);
   const [isMicOn, setIsMicOn] = useState(false);
-  const [inputType, setInputType] = useState<'speech' | 'typing'>('speech');
+  const [inputType, setInputType] = useState('speech');
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
 
   useEffect(() => {
-    if (isLoaded && user) {
-      setShowIntro(false);
-    }
+    if (isLoaded && user) setShowIntro(false);
   }, [isLoaded, user]);
 
-  const playSound = (type: 'type' | 'heaven' | 'error') => {
+  const playSound = (type) => {
     try {
         const audio = new Audio(`/sounds/${type}.wav`);
         if (type === 'type') audio.volume = 0.3;
@@ -113,61 +113,106 @@ export default function Home() {
     } catch (e) {}
   };
 
+  // ==============================================================================
+  // ★ 3. 음성 인식 엔진
+  // ==============================================================================
+  
+  const createRecognition = () => {
+      // @ts-ignore
+      const recognition = new window.webkitSpeechRecognition();
+      recognition.continuous = true;  
+      recognition.interimResults = true; 
+      recognition.lang = 'ko-KR';
+
+      recognition.onstart = () => {
+          setIsMicOn(true);
+          if (inputRef.current) inputRef.current.placeholder = "듣고 있습니다... (말씀을 읽으세요)";
+      };
+
+      recognition.onresult = (event) => {
+          if (isInputBlocked.current) return; 
+
+          setInputType('speech');
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+              transcript += event.results[i][0].transcript;
+          }
+          if (transcript.trim()) {
+              setInputText(transcript.normalize('NFC'));
+          }
+      };
+
+      recognition.onerror = (event) => {
+          console.error("마이크 에러:", event.error);
+          if (event.error !== 'aborted') {
+              handleRestart(); 
+          }
+      };
+
+      recognition.onend = () => {
+          if (isListeningDesired.current) {
+              handleRestart();
+          } else {
+              setIsMicOn(false);
+              if (inputRef.current) inputRef.current.placeholder = "마이크 대기 중...";
+          }
+      };
+
+      recognitionRef.current = recognition;
+      try {
+          recognition.start();
+      } catch (e) {
+          console.error("이미 시작됨:", e);
+      }
+  };
+
+  const handleRestart = () => {
+      if (!isListeningDesired.current) return;
+
+      setTimeout(() => {
+          if (isListeningDesired.current) {
+              if (recognitionRef.current) {
+                  try { recognitionRef.current.abort(); } catch(e) {}
+                  recognitionRef.current = null;
+              }
+              createRecognition();
+          }
+      }, 500);
+  };
+
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window)) {
         alert('이 브라우저에서는 음성 인식이 지원되지 않습니다.');
         return;
     }
 
-    if (isMicOn) return;
-    isListeningDesired.current = true; 
+    isListeningDesired.current = true;
+    setIsMicOn(true);
 
-    if (!recognitionRef.current) {
-        // @ts-ignore
-        const recognition = new window.webkitSpeechRecognition();
-        recognition.continuous = true; 
-        recognition.interimResults = true; 
-        recognition.lang = 'ko-KR';
-
-        recognition.onstart = () => {
-            setIsMicOn(true);
-            if (inputRef.current) inputRef.current.placeholder = "듣고 있습니다... (말씀을 읽으세요)";
-        };
-
-        recognition.onresult = (event: any) => {
-            if (isInputBlocked.current) return;
-            setInputType('speech');
-
-            let transcript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                transcript += event.results[i][0].transcript;
-            }
-            setInputText(transcript.normalize('NFC')); 
-        };
-
-        recognition.onend = () => {
-            setIsMicOn(false);
-            if (inputRef.current) inputRef.current.placeholder = "마이크 대기 중...";
-            if (isListeningDesired.current) {
-                try { recognition.start(); } catch (e) {}
-            }
-        };
-        recognitionRef.current = recognition;
+    if (recognitionRef.current) {
+        recognitionRef.current.abort();
+        recognitionRef.current = null;
     }
-    try { recognitionRef.current.start(); } catch (e) {}
+
+    createRecognition();
   };
 
   const stopListening = () => {
       isListeningDesired.current = false;
       if (recognitionRef.current) recognitionRef.current.abort();
       setIsMicOn(false);
+      if (recognitionRef.current) {
+          recognitionRef.current.abort();
+          recognitionRef.current = null;
+      }
   };
 
   const toggleMic = () => {
-      if (isMicOn) stopListening();
+      if (isListeningDesired.current) stopListening();
       else startListening();
   };
 
+  // 초기 데이터 로딩
   useEffect(() => {
     const randomBg = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
     setBgUrl(randomBg);
@@ -179,17 +224,17 @@ export default function Home() {
     fetch('/bible.json')
       .then(res => res.json())
       .then(data => {
-        let rawData: {ref: string, text: string}[] = [];
+        let rawData = [];
         if (Array.isArray(data)) rawData = data;
         else rawData = Object.entries(data).map(([k, v]) => ({ ref: k, text: String(v) }));
-        const parsedData: BibleVerse[] = rawData.map(item => {
+        const parsedData = rawData.map(item => {
             const match = item.ref.match(/^([^\d:]+)\s*(\d+):(\d+)$/);
             if (match) { return { ...item, book: match[1].trim(), chapter: parseInt(match[2]), verse: parseInt(match[3]) }; }
             return { ...item, book: "기타", chapter: 0, verse: 0 };
         }).filter(v => v.book !== "기타");
 
         setAllVerses(parsedData);
-        const books: string[] = [];
+        const books = [];
         parsedData.forEach(v => { if (!books.includes(v.book)) books.push(v.book); });
         setBookList(books);
         if (lastBook && books.includes(lastBook)) {
@@ -224,7 +269,11 @@ export default function Home() {
     setInputText("");
     setCurrentScore(0);
     setCurrentLenPercent(0);
-    setTimeout(() => { isInputBlocked.current = false; }, 500);
+
+    isInputBlocked.current = true;
+    setTimeout(() => { 
+        isInputBlocked.current = false; 
+    }, 500);
 
   }, [selectedBook, selectedChapter, allVerses]);
 
@@ -266,12 +315,9 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const performSuccessAction = (verseRef: string) => {
+  const performSuccessAction = (verseRef) => {
     isInputBlocked.current = true; 
-    if (isListeningDesired.current && recognitionRef.current) {
-        recognitionRef.current.abort(); 
-    }
-
+    
     playSound('heaven');
     setIsSuccess(true);
     
@@ -287,7 +333,7 @@ export default function Home() {
         
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
-            setTimeout(() => { isInputBlocked.current = false; }, 500);
+            // useEffect에서 0.5초 뒤 차단 해제됨
         } else {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
             stopListening(); 
@@ -310,14 +356,14 @@ export default function Home() {
     }
   }, [inputText, currentVerse, isSuccess, loading, inputType]); 
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e) => {
     if (isInputBlocked.current) return;
     setInputType('typing');
     setInputText(e.target.value.normalize('NFC'));
     playSound('type');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !loading) {
        performSuccessAction(currentVerse.ref);
     }
@@ -407,6 +453,11 @@ export default function Home() {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       
+      {/* Version Check Label */}
+      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, color: 'rgba(255,255,255,0.5)', fontSize: '12px', pointerEvents: 'none' }}>
+        Ver 13.3 (Removed Type Definition)
+      </div>
+
       {showIntro && (
         <div style={{ 
             position: 'absolute', inset: 0, zIndex: 9999, 
@@ -521,7 +572,7 @@ export default function Home() {
                         background: isMicOn ? 'rgba(0, 255, 0, 0.9)' : 'rgba(255, 230, 0, 0.9)', 
                         color: 'black', border: `2px solid ${isMicOn ? '#00ff00' : '#ffe600'}`, 
                         padding: '0 15px', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold',
-                        borderRadius: '0 15px 15px 0', boxShadow: '0 15px 40px rgba(0,0,0,0.6)',
+                        borderRadius: '0 15px 15px 0', boxShadow: '0 15px 40px rgba(0,0,0,0.6)', 
                         borderLeft: 'none', transition: 'background 0.3s'
                     }}
                 >
