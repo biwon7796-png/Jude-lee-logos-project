@@ -258,6 +258,7 @@ export default function Home() {
     localStorage.setItem('logos_last_book', selectedBook);
   }, [selectedBook, allVerses]);
 
+  // 절이 바뀔 때 초기화
   useEffect(() => {
     if (!selectedBook || !selectedChapter) return;
     localStorage.setItem('logos_last_chapter', selectedChapter.toString());
