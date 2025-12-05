@@ -1,9 +1,7 @@
 /* eslint-disable */
 'use client';
-import leven from 'leven';
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
-// Clerk 관련 기능 가져오기
 import { SignInButton, SignedIn, SignedOut, UserButton, useUser } from '@clerk/nextjs';
 
 const LOCAL_BACKGROUNDS = [
@@ -13,9 +11,6 @@ const LOCAL_BACKGROUNDS = [
   '/backgrounds/back10.jpeg',
 ];
 
-
-
-// ==============================================================================
 // 2. 하이브리드 판정 로직
 const isMatchEnough = (userInput, targetVerse, inputType) => {
   if (!userInput || !targetVerse) return { passed: false, score: 0, lenPercent: 0 };
@@ -29,7 +24,6 @@ const isMatchEnough = (userInput, targetVerse, inputType) => {
     ? Math.min(Math.round((cleanInputRaw.length / cleanTargetRaw.length) * 100), 100) 
     : 0;
 
-  // 길이 기준: 타자(100%), 음성(95%)
   const lengthThreshold = inputType === 'typing' ? 1.0 : 0.95;
 
   if (cleanInputRaw.length < cleanTargetRaw.length * lengthThreshold) {
@@ -55,7 +49,6 @@ const isMatchEnough = (userInput, targetVerse, inputType) => {
   });
 
   const score = Math.round((matchCount / totalWords) * 100);
-  // 정확도 기준: 타자(80%), 음성(70%)
   const scoreThreshold = inputType === 'typing' ? 80 : 70;
   const passed = score >= scoreThreshold; 
 
@@ -66,13 +59,11 @@ export default function Home() {
   const { user, isLoaded } = useUser();
   const [showIntro, setShowIntro] = useState(true);
 
-  // Refs
   const sceneRef = useRef(null);
   const engineRef = useRef(null);
   const bodiesRef = useRef([]); 
   const inputRef = useRef(null);
 
-  // 마이크 관련 Refs
   const recognitionRef = useRef(null); 
   const isListeningDesired = useRef(false); 
   const isInputBlocked = useRef(false);
@@ -113,10 +104,6 @@ export default function Home() {
     } catch (e) {}
   };
 
-  // ==============================================================================
-  // ★ 3. 음성 인식 엔진
-  // ==============================================================================
-  
   const createRecognition = () => {
       // @ts-ignore
       const recognition = new window.webkitSpeechRecognition();
@@ -199,7 +186,6 @@ export default function Home() {
 
   const stopListening = () => {
       isListeningDesired.current = false;
-      if (recognitionRef.current) recognitionRef.current.abort();
       setIsMicOn(false);
       if (recognitionRef.current) {
           recognitionRef.current.abort();
@@ -212,7 +198,6 @@ export default function Home() {
       else startListening();
   };
 
-  // 초기 데이터 로딩
   useEffect(() => {
     const randomBg = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
     setBgUrl(randomBg);
@@ -258,7 +243,6 @@ export default function Home() {
     localStorage.setItem('logos_last_book', selectedBook);
   }, [selectedBook, allVerses]);
 
-  // 절이 바뀔 때 초기화
   useEffect(() => {
     if (!selectedBook || !selectedChapter) return;
     localStorage.setItem('logos_last_chapter', selectedChapter.toString());
@@ -278,7 +262,6 @@ export default function Home() {
 
   }, [selectedBook, selectedChapter, allVerses]);
 
-  // ★ 여기가 중요합니다! 타입 에러 무시 코드 추가됨 ★
   useEffect(() => {
     const initPhysics = async () => {
       if (typeof window === 'undefined') return;
@@ -287,7 +270,6 @@ export default function Home() {
         await import('pathseg');
         // @ts-ignore
         const decomp = await import('poly-decomp');
-        
         const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner, Bodies = Matter.Bodies, Composite = Matter.Composite, Mouse = Matter.Mouse;
         Matter.Common.setDecomp(decomp.default || decomp);
         if (engineRef.current) return;
@@ -334,7 +316,6 @@ export default function Home() {
         
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
-            // useEffect에서 0.5초 뒤 차단 해제됨
         } else {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
             stopListening(); 
@@ -456,7 +437,7 @@ export default function Home() {
       
       {/* Version Check Label */}
       <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, color: 'rgba(255,255,255,0.5)', fontSize: '12px', pointerEvents: 'none' }}>
-        Ver 13.3 (Removed Type Definition)
+        Ver 14.0 (Clean JS)
       </div>
 
       {showIntro && (
