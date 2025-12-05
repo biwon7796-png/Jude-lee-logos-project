@@ -397,7 +397,7 @@ export default function Home() {
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       {/* Version Check Label */}
       <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, color: 'rgba(255,255,255,0.5)', fontSize: '12px', pointerEvents: 'none' }}>
-        Ver 9.0 (오답 표시 제거)
+        Ver 9.1 (오답 표시 제거)
       </div>
 
       <div style={{ 
