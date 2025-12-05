@@ -3,9 +3,6 @@ import leven from 'leven';
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
-// ==============================================================================
-// 1. 이미지 파일 목록
-// ==============================================================================
 const LOCAL_BACKGROUNDS = [
   '/backgrounds/back1.jpeg', '/backgrounds/back2.jpeg', '/backgrounds/back3.jpeg',
   '/backgrounds/back4.jpeg', '/backgrounds/back5.jpeg', '/backgrounds/back6.jpeg',
@@ -18,56 +15,56 @@ type BibleVerse = {
 };
 
 // ==============================================================================
-// ★ 2. 초강력 길이 제한 로직 (조기 넘김 완벽 차단)
+// 2. 하이브리드 판정 로직 (입력 방식에 따라 기준 변경)
 // ==============================================================================
-const isMatchEnough = (userInput: string, targetVerse: string) => {
-  if (!userInput || !targetVerse) return { passed: false, score: 0 };
+const isMatchEnough = (userInput: string, targetVerse: string, inputType: string) => {
+  if (!userInput || !targetVerse) return { passed: false, score: 0, lenPercent: 0 };
 
   const normInput = userInput.normalize('NFC');
   const normTarget = targetVerse.normalize('NFC');
 
-  // 공백 제거 버전 (순수 글자 수 비교)
+  // 공백 제거 (글자 수 비교용)
   const cleanTargetRaw = normTarget.replace(/\s+/g, '');
   const cleanInputRaw = normInput.replace(/\s+/g, '');
 
-  // ★ [핵심 변경] 길이 제한을 80% -> 95%로 상향
-  // 즉, 문장의 95% 이상을 말하지 않으면 아예 채점도 안 하고 탈락시킵니다.
-  // 예: "태초에 하나님이 천지를" (탈락) -> "...창조하시니라" (통과)
-  if (cleanInputRaw.length < cleanTargetRaw.length * 0.95) {
-      return { passed: false, score: 0 }; 
+  // 현재 길이 퍼센트 계산
+  const lenPercent = Math.min(Math.round((cleanInputRaw.length / cleanTargetRaw.length) * 100), 100);
+
+  // ★ [핵심 변경] 입력 방식에 따른 길이 제한 설정
+  // typing(타자) -> 100% (완벽해야 함)
+  // speech(음성) -> 95% (조금 봐줌)
+  const lengthThreshold = inputType === 'typing' ? 1.0 : 0.95;
+
+  if (cleanInputRaw.length < cleanTargetRaw.length * lengthThreshold) {
+      return { passed: false, score: 0, lenPercent }; 
   }
 
-  // 특수문자 제거 및 단어 분리
+  // 정확도 검사 (기존 유지)
   const cleanTarget = normTarget.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
   const cleanInput = normInput.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
   
   const targetWords = cleanTarget.split(/\s+/).filter(w => w.length > 0);
   const totalWords = targetWords.length;
 
-  if (totalWords === 0) return { passed: false, score: 0 };
+  if (totalWords === 0) return { passed: false, score: 0, lenPercent };
 
   let matchCount = 0;
   targetWords.forEach(word => {
-    // 1. 단어 포함 여부
     if (cleanInput.includes(word)) {
       matchCount++;
-    } 
-    // 2. 유연성 (앞 두 글자)
-    else if (word.length >= 2) {
+    } else if (word.length >= 2) {
       const root = word.substring(0, 2);
-      if (cleanInput.includes(root)) {
-        matchCount++;
-      }
+      if (cleanInput.includes(root)) matchCount++;
     }
   });
 
   const score = Math.round((matchCount / totalWords) * 100);
   
-  // ★ [핵심 변경] 통과 기준 점수도 40% -> 60%로 상향
-  // 길이는 맞췄는데 엉뚱한 소리를 했을 경우를 방지
-  const passed = score >= 60; 
+  // 타자는 정확도도 좀 더 엄격하게 (80%), 음성은 (70%)
+  const scoreThreshold = inputType === 'typing' ? 80 : 70;
+  const passed = score >= scoreThreshold; 
 
-  return { passed, score };
+  return { passed, score, lenPercent };
 };
 
 export default function Home() {
@@ -78,7 +75,7 @@ export default function Home() {
 
   const recognitionRef = useRef<any>(null); 
   const isListeningDesired = useRef(false); 
-  const isInputBlocked = useRef(false); // 입력 차단 플래그
+  const isInputBlocked = useRef(false);
 
   const [allVerses, setAllVerses] = useState<BibleVerse[]>([]);
   const [activeVerses, setActiveVerses] = useState<BibleVerse[]>([]);
@@ -94,8 +91,14 @@ export default function Home() {
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
   const [showTable, setShowTable] = useState(false);
   const [bgUrl, setBgUrl] = useState("");
+  
+  // 상태 표시용
   const [currentScore, setCurrentScore] = useState(0);
+  const [currentLenPercent, setCurrentLenPercent] = useState(0);
   const [isMicOn, setIsMicOn] = useState(false);
+  
+  // ★ 입력 소스 추적 ('speech' | 'typing')
+  const [inputType, setInputType] = useState<'speech' | 'typing'>('speech');
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
 
@@ -132,6 +135,9 @@ export default function Home() {
 
         recognition.onresult = (event: any) => {
             if (isInputBlocked.current) return;
+
+            // ★ 음성 입력 감지됨 -> 타입 변경
+            setInputType('speech');
 
             let transcript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -218,6 +224,7 @@ export default function Home() {
     
     setInputText("");
     setCurrentScore(0);
+    setCurrentLenPercent(0);
     setTimeout(() => { isInputBlocked.current = false; }, 100);
 
   }, [selectedBook, selectedChapter, allVerses]);
@@ -271,10 +278,10 @@ export default function Home() {
     setTimeout(() => { 
         setInputText(""); 
         setCurrentScore(0);
+        setCurrentLenPercent(0);
         
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
-            // 0.3초 대기 (빠른 전환)
             setTimeout(() => { isInputBlocked.current = false; }, 300);
         } else {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
@@ -289,16 +296,23 @@ export default function Home() {
     if (isInputBlocked.current || isSuccess || loading || !currentVerse.text) return;
     if (!inputText || inputText.trim().length < 1) return;
 
-    const result = isMatchEnough(inputText, currentVerse.text);
+    // ★ 현재 입력 모드(inputType)를 함께 전달
+    const result = isMatchEnough(inputText, currentVerse.text, inputType);
+    
     setCurrentScore(result.score);
+    setCurrentLenPercent(result.lenPercent);
 
     if (result.passed) {
         performSuccessAction(currentVerse.ref);
     }
-  }, [inputText, currentVerse, isSuccess, loading]); 
+  }, [inputText, currentVerse, isSuccess, loading, inputType]); 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isInputBlocked.current) return;
+
+    // ★ 키보드 입력 감지됨 -> 타입 변경
+    setInputType('typing');
+
     setInputText(e.target.value.normalize('NFC'));
     playSound('type');
   };
@@ -312,10 +326,10 @@ export default function Home() {
   const renderVerseText = () => {
     const targetText = currentVerse.text.normalize('NFC');
     const typedText = inputText.normalize('NFC');
-    // 진행률 시각화용 변수
-    const targetLen = targetText.replace(/\s+/g, '').length;
-    const inputLen = typedText.replace(/\s+/g, '').length;
-    const lenPercent = Math.min(Math.round((inputLen / targetLen) * 100), 100);
+
+    // 목표 길이 계산 (시각적 피드백용)
+    const targetLen = inputType === 'typing' ? 100 : 95;
+    const targetScore = inputType === 'typing' ? 80 : 70;
 
     return (
         <div>
@@ -338,14 +352,19 @@ export default function Home() {
             })}
             </h1>
             
-            {/* ★ 진행 상황 디버그 바 (캡틴 확인용) */}
-            <div style={{ marginTop: '10px', fontSize: '11px', color: '#aaa' }}>
-                <span style={{ color: lenPercent >= 95 ? '#00ff00' : '#ff5555', marginRight: '10px' }}>
-                   길이: {lenPercent}% (95% 필요)
-                </span>
-                <span style={{ color: currentScore >= 60 ? '#00ff00' : '#ff5555' }}>
-                   정확도: {currentScore}% (60% 필요)
-                </span>
+            {/* 진행 상황 디버그 바 */}
+            <div style={{ marginTop: '10px', fontSize: '11px', color: '#aaa', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div>
+                   모드: <span style={{ color: '#ffe600', fontWeight: 'bold' }}>{inputType === 'typing' ? '⌨️ 타자' : '🎤 음성'}</span>
+                </div>
+                <div>
+                    <span style={{ color: currentLenPercent >= targetLen ? '#00ff00' : '#ff5555', marginRight: '10px' }}>
+                    길이: {currentLenPercent}% ({targetLen}% 필요)
+                    </span>
+                    <span style={{ color: currentScore >= targetScore ? '#00ff00' : '#ff5555' }}>
+                    정확도: {currentScore}% ({targetScore}% 필요)
+                    </span>
+                </div>
             </div>
         </div>
     );
@@ -390,6 +409,11 @@ export default function Home() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
+      {/* Version Check Label */}
+      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, color: 'rgba(255,255,255,0.5)', fontSize: '12px', pointerEvents: 'none' }}>
+        Ver 6.0 (타자 100% / 음성 95%)
+      </div>
+
       <div style={{ 
           position: 'absolute', inset: 0, zIndex: 0, 
           backgroundImage: bgUrl ? `url('${bgUrl}')` : 'none', 
