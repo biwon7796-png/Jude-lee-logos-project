@@ -2,6 +2,8 @@
 import leven from 'leven';
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
+// Clerk 관련 기능 가져오기
+import { SignInButton, SignedIn, SignedOut, UserButton, useUser } from '@clerk/nextjs';
 
 const LOCAL_BACKGROUNDS = [
   '/backgrounds/back1.jpeg', '/backgrounds/back2.jpeg', '/backgrounds/back3.jpeg',
@@ -61,6 +63,9 @@ const isMatchEnough = (userInput: string, targetVerse: string, inputType: string
 };
 
 export default function Home() {
+  const { user, isLoaded } = useUser();
+  const [showIntro, setShowIntro] = useState(true);
+
   const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
   const bodiesRef = useRef<Matter.Body[]>([]); 
@@ -91,6 +96,12 @@ export default function Home() {
   const [inputType, setInputType] = useState<'speech' | 'typing'>('speech');
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
+
+  useEffect(() => {
+    if (isLoaded && user) {
+      setShowIntro(false);
+    }
+  }, [isLoaded, user]);
 
   const playSound = (type: 'type' | 'heaven' | 'error') => {
     try {
@@ -217,6 +228,7 @@ export default function Home() {
 
   }, [selectedBook, selectedChapter, allVerses]);
 
+  // ★ 여기가 중요합니다! 타입 에러 무시 코드 추가됨 ★
   useEffect(() => {
     const initPhysics = async () => {
       if (typeof window === 'undefined') return;
@@ -225,6 +237,7 @@ export default function Home() {
         await import('pathseg');
         // @ts-ignore
         const decomp = await import('poly-decomp');
+        
         const Engine = Matter.Engine, Render = Matter.Render, Runner = Matter.Runner, Bodies = Matter.Bodies, Composite = Matter.Composite, Mouse = Matter.Mouse;
         Matter.Common.setDecomp(decomp.default || decomp);
         if (engineRef.current) return;
@@ -328,11 +341,9 @@ export default function Home() {
                 const isTyped = index < typedText.length;
                 const targetChar = targetText[index];
                 const inputChar = typedText[index];
-                let charColor = '#ffffff'; // 기본 흰색
-                
+                let charColor = '#ffffff';
                 if (isTyped) {
                     const isCorrect = targetChar === inputChar;
-                    // ★ 수정 완료: 맞으면 노랑, 틀려도 그냥 흰색으로 유지!
                     charColor = isCorrect ? '#ffe600' : '#ffffff';
                 }
                 return <span key={index} style={{ color: charColor, transition: 'color 0.1s linear' }}>{char}</span>;
@@ -395,9 +406,61 @@ export default function Home() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
-      {/* Version Check Label */}
-      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, color: 'rgba(255,255,255,0.5)', fontSize: '12px', pointerEvents: 'none' }}>
-        Ver 9.2 (오답 표시 제거 + 통합)
+      
+      {showIntro && (
+        <div style={{ 
+            position: 'absolute', inset: 0, zIndex: 9999, 
+            backgroundColor: '#000',
+            backgroundImage: bgUrl ? `url('${bgUrl}')` : 'none', 
+            backgroundSize: 'cover', backgroundPosition: 'center',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            color: 'white', transition: 'opacity 0.5s ease'
+        }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+            
+            <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+                <h1 style={{ fontSize: '40px', fontWeight: '900', marginBottom: '10px', textShadow: '0 0 20px rgba(255,255,255,0.5)' }}>
+                    LOGOS PROJECT
+                </h1>
+                <p style={{ fontSize: '18px', marginBottom: '40px', color: '#ccc' }}>
+                    AI 성경 통독 & 암송 도우미
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <SignInButton mode="modal">
+                        <button style={{
+                            padding: '15px 40px', fontSize: '18px', fontWeight: 'bold', 
+                            borderRadius: '30px', border: 'none', cursor: 'pointer',
+                            background: '#ffe600', color: '#000', boxShadow: '0 5px 15px rgba(255, 230, 0, 0.4)'
+                        }}>
+                            로그인하고 시작하기
+                        </button>
+                    </SignInButton>
+
+                    <button 
+                        onClick={() => setShowIntro(false)}
+                        style={{
+                            padding: '12px 30px', fontSize: '16px', fontWeight: 'bold', 
+                            borderRadius: '30px', border: '2px solid rgba(255,255,255,0.3)', 
+                            background: 'transparent', color: '#fff', cursor: 'pointer'
+                        }}
+                    >
+                        그냥 체험하기 (게스트)
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 100 }}>
+        <SignedIn>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(0,0,0,0.5)', padding: '5px 10px', borderRadius: '30px', border:'1px solid rgba(255,255,255,0.2)' }}>
+                <UserButton afterSignOutUrl="/"/>
+                <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>
+                    {user ? `${user.firstName || '성도'}님` : ''}
+                </span>
+            </div>
+        </SignedIn>
       </div>
 
       <div style={{ 
