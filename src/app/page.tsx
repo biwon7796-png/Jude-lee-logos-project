@@ -3,14 +3,11 @@ import leven from 'leven';
 import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
-// VTT를 위한 타입 선언
-// src/app/page.tsx 맨 윗부분 (VTT 타입 선언 아래)
-
 // ==============================================================================
 // ★ 1. 이미지 파일 목록 (JPEG 파일 10개)
+// 주의: 이 파일들은 프로젝트의 'public/backgrounds' 폴더 안에 있어야 합니다.
 // ==============================================================================
 const LOCAL_BACKGROUNDS = [
-  // 캡틴의 파일 이름과 확장자를 정확히 적어주세요! (JPEG로 가정합니다)
   '/backgrounds/back1.jpeg', 
   '/backgrounds/back2.jpeg',
   '/backgrounds/back3.jpeg',
@@ -23,15 +20,10 @@ const LOCAL_BACKGROUNDS = [
   '/backgrounds/back10.jpeg',
 ];
 
-// 목록 중 하나를 랜덤으로 선택하여 URL 확정
-const BACKGROUND_IMAGE_URL = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
-// ==============================================================================
-
 type BibleVerse = {
   ref: string; text: string; book: string; chapter: number; verse: number;
 };
 
-// ... (Home 컴포넌트 생략)
 export default function Home() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
@@ -51,6 +43,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
   const [showTable, setShowTable] = useState(false);
+  
+  // ★ 배경 이미지 상태 추가 (초기값은 빈 문자열)
+  const [bgUrl, setBgUrl] = useState("");
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
 
@@ -110,6 +105,10 @@ export default function Home() {
 
   // 1. 초기 로딩 및 데이터 파싱
   useEffect(() => {
+    // ★ 배경 이미지 랜덤 선택 로직 (클라이언트 사이드에서 실행)
+    const randomBg = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
+    setBgUrl(randomBg);
+
     const savedCompleted = localStorage.getItem('logos_completed');
     if (savedCompleted) setCompletedSet(new Set(JSON.parse(savedCompleted)));
 
@@ -146,7 +145,7 @@ export default function Home() {
       .catch(err => { console.error(err); setLoading(false); });
   }, []);
 
-  // 2. 선택/물리 엔진/핸들러 로직 (생략 - 위와 동일)
+  // 2. 선택/물리 엔진/핸들러 로직
   useEffect(() => {
     if (!selectedBook) return;
     const versesInBook = allVerses.filter(v => v.book === selectedBook);
@@ -245,8 +244,8 @@ export default function Home() {
     // 1. 전체 길이가 맞아야 함 (오차가 너무 크면 실패)
     if (Math.abs(cleanInput.length - cleanTarget.length) > maxErrors * 2) return false;
 
-    // 2. Levenshtein Distance 계산
-     const distance = leven(cleanInput, cleanTarget);
+    // 2. Levenshtein Distance 계산 (★수정됨★)
+    const distance = leven(cleanInput, cleanTarget);
     
     // 3. 오차가 허용치 내인지 확인
     return distance <= maxErrors; 
@@ -298,7 +297,6 @@ export default function Home() {
     }
   };
 
-  // ... (renderVerseText, renderReadingTable, return JSX 생략 - 위와 동일)
   const renderVerseText = () => {
     const targetText = currentVerse.text;
     const typedText = inputText;
@@ -385,7 +383,18 @@ export default function Home() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
-      <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: `url('${BACKGROUND_IMAGE_URL}')`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.5 }} />
+      {/* 배경 이미지 영역 (bgUrl이 있을 때만 표시) */}
+      <div style={{ 
+          position: 'absolute', 
+          inset: 0, 
+          zIndex: 0, 
+          backgroundImage: bgUrl ? `url('${bgUrl}')` : 'none', 
+          backgroundSize: 'cover', 
+          backgroundPosition: 'center', 
+          opacity: 0.5,
+          transition: 'background-image 0.5s ease-in'
+        }} 
+      />
       <div ref={sceneRef} style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }} />
 
       <button onClick={() => setShowTable(true)} style={{ position: 'absolute', top: '20px', right: '30px', zIndex: 30, background: 'rgba(255, 255, 255, 0.9)', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '30px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>📊 성경읽기표</button>
