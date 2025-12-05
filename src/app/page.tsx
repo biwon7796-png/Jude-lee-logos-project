@@ -4,18 +4,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import Matter from 'matter-js';
 
 // ==============================================================================
-// ★ 1. 이미지 파일 목록
+// 1. 이미지 파일 목록
 // ==============================================================================
 const LOCAL_BACKGROUNDS = [
-  '/backgrounds/back1.jpeg', 
-  '/backgrounds/back2.jpeg',
-  '/backgrounds/back3.jpeg',
-  '/backgrounds/back4.jpeg',
-  '/backgrounds/back5.jpeg',
-  '/backgrounds/back6.jpeg',
-  '/backgrounds/back7.jpeg',
-  '/backgrounds/back8.jpeg',
-  '/backgrounds/back9.jpeg',
+  '/backgrounds/back1.jpeg', '/backgrounds/back2.jpeg', '/backgrounds/back3.jpeg',
+  '/backgrounds/back4.jpeg', '/backgrounds/back5.jpeg', '/backgrounds/back6.jpeg',
+  '/backgrounds/back7.jpeg', '/backgrounds/back8.jpeg', '/backgrounds/back9.jpeg',
   '/backgrounds/back10.jpeg',
 ];
 
@@ -24,65 +18,67 @@ type BibleVerse = {
 };
 
 // ==============================================================================
-// ★ 2. 결정적 해결책: 직통 프리패스 로직 추가
-// 화면에 노란색이 떴다는 건 글자가 같다는 뜻이므로, 여기서도 똑같이 검사합니다.
+// ★ 2. 초강력 길이 제한 로직 (조기 넘김 완벽 차단)
 // ==============================================================================
 const isMatchEnough = (userInput: string, targetVerse: string) => {
   if (!userInput || !targetVerse) return { passed: false, score: 0 };
 
-  // 1. 정규화 (맥/윈도우 자소 분리 방지)
   const normInput = userInput.normalize('NFC');
   const normTarget = targetVerse.normalize('NFC');
 
-  // 2. [핵심] 공백을 다 없애고 비교 (띄어쓰기 실수 봐줌)
-  // 예: "태초에 하나님이" vs "태초에하나님이" -> 같다고 판단
-  const cleanInput = normInput.replace(/[\s\t\r\n]/g, '');
-  const cleanTarget = normTarget.replace(/[\s\t\r\n]/g, '');
+  // 공백 제거 버전 (순수 글자 수 비교)
+  const cleanTargetRaw = normTarget.replace(/\s+/g, '');
+  const cleanInputRaw = normInput.replace(/\s+/g, '');
 
-  // 3. ★ 완벽 일치 프리패스 (Yellow 상태면 무조건 여기서 걸려서 True 리턴)
-  if (cleanInput.includes(cleanTarget) || cleanTarget === cleanInput) {
-      return { passed: true, score: 100 };
-  }
-  
-  // 4. 입력이 타겟보다 길어져도(군더더기 말), 타겟 내용이 다 들어있으면 통과
-  if (cleanInput.length > cleanTarget.length) {
-     if (cleanInput.includes(cleanTarget)) {
-         return { passed: true, score: 100 };
-     }
+  // ★ [핵심 변경] 길이 제한을 80% -> 95%로 상향
+  // 즉, 문장의 95% 이상을 말하지 않으면 아예 채점도 안 하고 탈락시킵니다.
+  // 예: "태초에 하나님이 천지를" (탈락) -> "...창조하시니라" (통과)
+  if (cleanInputRaw.length < cleanTargetRaw.length * 0.95) {
+      return { passed: false, score: 0 }; 
   }
 
-  // ---------------------------------------------------------
-  // 아래는 "완벽하진 않지만 대충 맞았을 때"를 위한 보너스 로직
-  // ---------------------------------------------------------
+  // 특수문자 제거 및 단어 분리
+  const cleanTarget = normTarget.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
+  const cleanInput = normInput.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
   
-  // 특수문자 제거 후 단어 비교
-  const wordTarget = normTarget.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '');
-  const wordInput = normInput.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '');
-  
-  const targetWords = wordTarget.split(/\s+/).filter(w => w.length > 0);
+  const targetWords = cleanTarget.split(/\s+/).filter(w => w.length > 0);
   const totalWords = targetWords.length;
-  
+
   if (totalWords === 0) return { passed: false, score: 0 };
 
   let matchCount = 0;
   targetWords.forEach(word => {
-    // 두 글자 이상이면 앞 두 글자만 맞아도 됨
-    const root = word.length >= 2 ? word.substring(0, 2) : word;
-    if (wordInput.includes(root)) matchCount++;
+    // 1. 단어 포함 여부
+    if (cleanInput.includes(word)) {
+      matchCount++;
+    } 
+    // 2. 유연성 (앞 두 글자)
+    else if (word.length >= 2) {
+      const root = word.substring(0, 2);
+      if (cleanInput.includes(root)) {
+        matchCount++;
+      }
+    }
   });
 
-  const score = matchCount / totalWords;
+  const score = Math.round((matchCount / totalWords) * 100);
+  
+  // ★ [핵심 변경] 통과 기준 점수도 40% -> 60%로 상향
+  // 길이는 맞췄는데 엉뚱한 소리를 했을 경우를 방지
+  const passed = score >= 60; 
 
-  // 30% 이상 맞으면 통과
-  return { passed: score >= 0.3, score: Math.round(score * 100) };
+  return { passed, score };
 };
-
 
 export default function Home() {
   const sceneRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Matter.Engine | null>(null);
   const bodiesRef = useRef<Matter.Body[]>([]); 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const recognitionRef = useRef<any>(null); 
+  const isListeningDesired = useRef(false); 
+  const isInputBlocked = useRef(false); // 입력 차단 플래그
 
   const [allVerses, setAllVerses] = useState<BibleVerse[]>([]);
   const [activeVerses, setActiveVerses] = useState<BibleVerse[]>([]);
@@ -99,6 +95,7 @@ export default function Home() {
   const [showTable, setShowTable] = useState(false);
   const [bgUrl, setBgUrl] = useState("");
   const [currentScore, setCurrentScore] = useState(0);
+  const [isMicOn, setIsMicOn] = useState(false);
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
 
@@ -117,42 +114,60 @@ export default function Home() {
         alert('이 브라우저에서는 음성 인식이 지원되지 않습니다.');
         return;
     }
-    // @ts-ignore
-    const recognition = new window.webkitSpeechRecognition();
-    recognition.continuous = true; 
-    recognition.interimResults = true; 
-    recognition.lang = 'ko-KR';
 
-    recognition.onstart = () => {
-        if (inputRef.current) inputRef.current.placeholder = "듣고 있습니다...";
-    };
+    if (isMicOn) return;
+    isListeningDesired.current = true; 
 
-    recognition.onresult = (event: any) => {
-      let transcript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        transcript += event.results[i][0].transcript;
-      }
-      setInputText(transcript.normalize('NFC')); 
-    };
+    if (!recognitionRef.current) {
+        // @ts-ignore
+        const recognition = new window.webkitSpeechRecognition();
+        recognition.continuous = true; 
+        recognition.interimResults = true; 
+        recognition.lang = 'ko-KR';
 
-    recognition.onend = () => {
-        if (inputRef.current) inputRef.current.placeholder = "음성 인식이 끝났습니다.";
-    };
-    recognition.start();
+        recognition.onstart = () => {
+            setIsMicOn(true);
+            if (inputRef.current) inputRef.current.placeholder = "듣고 있습니다... (말씀을 읽으세요)";
+        };
 
-    const handleStop = (e: KeyboardEvent) => {
-        if (e.key === 'Enter') recognition.stop();
-    };
-    window.addEventListener('keydown', handleStop);
+        recognition.onresult = (event: any) => {
+            if (isInputBlocked.current) return;
+
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                transcript += event.results[i][0].transcript;
+            }
+            setInputText(transcript.normalize('NFC')); 
+        };
+
+        recognition.onend = () => {
+            setIsMicOn(false);
+            if (inputRef.current) inputRef.current.placeholder = "마이크 대기 중...";
+            if (isListeningDesired.current) {
+                try { recognition.start(); } catch (e) { isListeningDesired.current = false; }
+            }
+        };
+        recognitionRef.current = recognition;
+    }
+    try { recognitionRef.current.start(); } catch (e) {}
+  };
+
+  const stopListening = () => {
+      isListeningDesired.current = false;
+      if (recognitionRef.current) recognitionRef.current.stop();
+      setIsMicOn(false);
+  };
+
+  const toggleMic = () => {
+      if (isMicOn) stopListening();
+      else startListening();
   };
 
   useEffect(() => {
     const randomBg = LOCAL_BACKGROUNDS[Math.floor(Math.random() * LOCAL_BACKGROUNDS.length)];
     setBgUrl(randomBg);
-
     const savedCompleted = localStorage.getItem('logos_completed');
     if (savedCompleted) setCompletedSet(new Set(JSON.parse(savedCompleted)));
-
     const lastBook = localStorage.getItem('logos_last_book');
     const lastChapter = localStorage.getItem('logos_last_chapter');
 
@@ -162,7 +177,6 @@ export default function Home() {
         let rawData: {ref: string, text: string}[] = [];
         if (Array.isArray(data)) rawData = data;
         else rawData = Object.entries(data).map(([k, v]) => ({ ref: k, text: String(v) }));
-
         const parsedData: BibleVerse[] = rawData.map(item => {
             const match = item.ref.match(/^([^\d:]+)\s*(\d+):(\d+)$/);
             if (match) { return { ...item, book: match[1].trim(), chapter: parseInt(match[2]), verse: parseInt(match[3]) }; }
@@ -173,7 +187,6 @@ export default function Home() {
         const books: string[] = [];
         parsedData.forEach(v => { if (!books.includes(v.book)) books.push(v.book); });
         setBookList(books);
-
         if (lastBook && books.includes(lastBook)) {
             setSelectedBook(lastBook);
             setSelectedChapter(lastChapter ? parseInt(lastChapter) : 1);
@@ -202,7 +215,11 @@ export default function Home() {
     setActiveVerses(targetVerses);
     const firstIncompleteIndex = targetVerses.findIndex(v => !completedSet.has(v.ref));
     setVerseIndex(firstIncompleteIndex !== -1 ? firstIncompleteIndex : 0);
+    
     setInputText("");
+    setCurrentScore(0);
+    setTimeout(() => { isInputBlocked.current = false; }, 100);
+
   }, [selectedBook, selectedChapter, allVerses]);
 
   useEffect(() => {
@@ -220,7 +237,6 @@ export default function Home() {
         engineRef.current = engine;
         const world = engine.world;
         if (!sceneRef.current) return;
-        
         const render = Render.create({ element: sceneRef.current, engine: engine, options: { width: window.innerWidth, height: window.innerHeight, background: 'transparent', wireframes: false, showAngleIndicator: false, pixelRatio: 1 } });
         const wallOptions = { isStatic: true, render: { fillStyle: '#000000', opacity: 0.3 } };
         const ground = Bodies.rectangle(window.innerWidth / 2, window.innerHeight + 30, window.innerWidth, 60, wallOptions);
@@ -243,6 +259,7 @@ export default function Home() {
   }, []);
 
   const performSuccessAction = (verseRef: string) => {
+    isInputBlocked.current = true; 
     playSound('heaven');
     setIsSuccess(true);
     
@@ -254,42 +271,40 @@ export default function Home() {
     setTimeout(() => { 
         setInputText(""); 
         setCurrentScore(0);
+        
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
+            // 0.3초 대기 (빠른 전환)
+            setTimeout(() => { isInputBlocked.current = false; }, 300);
         } else {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
+            stopListening(); 
+            isInputBlocked.current = false;
         }
         setIsSuccess(false);
     }, 500); 
   };
 
-  // ★ 자동 넘김 감지 (useEffect)
   useEffect(() => {
-    if (isSuccess || loading || !currentVerse.text) return;
-    
-    if (!inputText || inputText.trim().length < 1) {
-        setCurrentScore(0);
-        return;
-    }
+    if (isInputBlocked.current || isSuccess || loading || !currentVerse.text) return;
+    if (!inputText || inputText.trim().length < 1) return;
 
     const result = isMatchEnough(inputText, currentVerse.text);
     setCurrentScore(result.score);
 
-    // 통과 조건 만족 시 즉시 실행
     if (result.passed) {
         performSuccessAction(currentVerse.ref);
     }
   }, [inputText, currentVerse, isSuccess, loading]); 
 
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isInputBlocked.current) return;
     setInputText(e.target.value.normalize('NFC'));
     playSound('type');
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !loading) {
-       // 엔터는 비상용 (그냥 통과)
        performSuccessAction(currentVerse.ref);
     }
   };
@@ -297,35 +312,42 @@ export default function Home() {
   const renderVerseText = () => {
     const targetText = currentVerse.text.normalize('NFC');
     const typedText = inputText.normalize('NFC');
+    // 진행률 시각화용 변수
+    const targetLen = targetText.replace(/\s+/g, '').length;
+    const inputLen = typedText.replace(/\s+/g, '').length;
+    const lenPercent = Math.min(Math.round((inputLen / targetLen) * 100), 100);
 
     return (
-        <h1 style={{ 
-            color: isSuccess ? '#00ffff' : '#ffffff', 
-            fontSize: '18px', 
-            fontWeight: '900', 
-            lineHeight: '1.6', 
-            wordBreak: 'keep-all', 
-            textShadow: isSuccess ? '0 0 40px #00ffff' : '0 0 15px #ffffff, 0 0 5px #000000', 
-            transition: 'all 0.5s ease', 
-            padding: '0 10px' 
-        }}>
-          {targetText.split('').map((char, index) => {
-            const isTyped = index < typedText.length;
-            const targetChar = targetText[index];
-            const inputChar = typedText[index];
+        <div>
+            <h1 style={{ 
+                color: isSuccess ? '#00ffff' : '#ffffff', 
+                fontSize: '18px', fontWeight: '900', lineHeight: '1.6', wordBreak: 'keep-all', 
+                textShadow: isSuccess ? '0 0 40px #00ffff' : '0 0 15px #ffffff, 0 0 5px #000000', 
+                transition: 'all 0.5s ease', padding: '0 10px' 
+            }}>
+            {targetText.split('').map((char, index) => {
+                const isTyped = index < typedText.length;
+                const targetChar = targetText[index];
+                const inputChar = typedText[index];
+                let charColor = '#ffffff';
+                if (isTyped) {
+                    const isCorrect = targetChar === inputChar;
+                    charColor = isCorrect ? '#ffe600' : '#ff5555';
+                }
+                return <span key={index} style={{ color: charColor, transition: 'color 0.1s linear' }}>{char}</span>;
+            })}
+            </h1>
             
-            let charColor = '#ffffff';
-            if (isTyped) {
-                const isCorrect = targetChar === inputChar;
-                charColor = isCorrect ? '#ffe600' : '#ff5555';
-            }
-            return (
-              <span key={index} style={{ color: charColor, transition: 'color 0.1s linear' }}>
-                {char}
-              </span>
-            );
-          })}
-        </h1>
+            {/* ★ 진행 상황 디버그 바 (캡틴 확인용) */}
+            <div style={{ marginTop: '10px', fontSize: '11px', color: '#aaa' }}>
+                <span style={{ color: lenPercent >= 95 ? '#00ff00' : '#ff5555', marginRight: '10px' }}>
+                   길이: {lenPercent}% (95% 필요)
+                </span>
+                <span style={{ color: currentScore >= 60 ? '#00ff00' : '#ff5555' }}>
+                   정확도: {currentScore}% (60% 필요)
+                </span>
+            </div>
+        </div>
     );
   };
   
@@ -366,7 +388,6 @@ export default function Home() {
     );
   };
 
-
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       <div style={{ 
@@ -400,9 +421,8 @@ export default function Home() {
             
             {renderVerseText()} 
             
-            {/* 디버그 점수 표시 (필요 없으면 삭제 가능) */}
-            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '5px' }}>
-                Score: {currentScore} / 100
+            <div style={{ fontSize: '13px', color: isMicOn ? '#00ff00' : '#ffe600', marginTop: '10px', fontWeight:'bold' }}>
+               {isMicOn ? "🟢 마이크 켜짐" : "🔴 마이크 꺼짐"}
             </div>
         </div>
         
@@ -416,25 +436,23 @@ export default function Home() {
                         flexGrow: 1, padding: '15px', fontSize: '16px', borderRadius: '15px 0 0 15px', 
                         border: '2px solid rgba(255,255,255,0.3)', 
                         background: 'rgba(0, 0, 0, 0.4)', 
-                        color: '#ffe600', 
-                        outline: 'none', 
-                        textAlign: 'center', 
-                        boxShadow: '0 15px 40px rgba(0,0,0,0.6)', 
-                        borderRight: 'none',
+                        color: '#ffe600', outline: 'none', textAlign: 'center', 
+                        boxShadow: '0 15px 40px rgba(0,0,0,0.6)', borderRight: 'none',
                         transition: 'border-color 0.3s, box-shadow 0.3s' 
                     }} 
                 />
                 
                 <button 
-                    onClick={startListening}
+                    onClick={toggleMic}
                     style={{
-                        background: 'rgba(255, 230, 0, 0.9)', color: 'black', border: '2px solid #ffe600', 
+                        background: isMicOn ? 'rgba(0, 255, 0, 0.9)' : 'rgba(255, 230, 0, 0.9)', 
+                        color: 'black', border: `2px solid ${isMicOn ? '#00ff00' : '#ffe600'}`, 
                         padding: '0 15px', fontSize: '20px', cursor: 'pointer', fontWeight: 'bold',
                         borderRadius: '0 15px 15px 0', boxShadow: '0 15px 40px rgba(0,0,0,0.6)',
-                        borderLeft: 'none',
+                        borderLeft: 'none', transition: 'background 0.3s'
                     }}
                 >
-                    🎤
+                    {isMicOn ? '🔴' : '🎤'}
                 </button>
             </div>
         )}
