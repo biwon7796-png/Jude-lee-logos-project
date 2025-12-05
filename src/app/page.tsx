@@ -15,31 +15,26 @@ type BibleVerse = {
 };
 
 // ==============================================================================
-// 2. 하이브리드 판정 로직 (입력 방식에 따라 기준 변경)
+// 2. 하이브리드 판정 로직
 // ==============================================================================
 const isMatchEnough = (userInput: string, targetVerse: string, inputType: string) => {
   if (!userInput || !targetVerse) return { passed: false, score: 0, lenPercent: 0 };
 
   const normInput = userInput.normalize('NFC');
   const normTarget = targetVerse.normalize('NFC');
-
-  // 공백 제거 (글자 수 비교용)
   const cleanTargetRaw = normTarget.replace(/\s+/g, '');
   const cleanInputRaw = normInput.replace(/\s+/g, '');
 
-  // 현재 길이 퍼센트 계산
-  const lenPercent = Math.min(Math.round((cleanInputRaw.length / cleanTargetRaw.length) * 100), 100);
+  const lenPercent = targetVerse.length > 0 
+    ? Math.min(Math.round((cleanInputRaw.length / cleanTargetRaw.length) * 100), 100) 
+    : 0;
 
-  // ★ [핵심 변경] 입력 방식에 따른 길이 제한 설정
-  // typing(타자) -> 100% (완벽해야 함)
-  // speech(음성) -> 95% (조금 봐줌)
   const lengthThreshold = inputType === 'typing' ? 1.0 : 0.95;
 
   if (cleanInputRaw.length < cleanTargetRaw.length * lengthThreshold) {
       return { passed: false, score: 0, lenPercent }; 
   }
 
-  // 정확도 검사 (기존 유지)
   const cleanTarget = normTarget.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
   const cleanInput = normInput.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim();
   
@@ -59,8 +54,6 @@ const isMatchEnough = (userInput: string, targetVerse: string, inputType: string
   });
 
   const score = Math.round((matchCount / totalWords) * 100);
-  
-  // 타자는 정확도도 좀 더 엄격하게 (80%), 음성은 (70%)
   const scoreThreshold = inputType === 'typing' ? 80 : 70;
   const passed = score >= scoreThreshold; 
 
@@ -92,12 +85,9 @@ export default function Home() {
   const [showTable, setShowTable] = useState(false);
   const [bgUrl, setBgUrl] = useState("");
   
-  // 상태 표시용
   const [currentScore, setCurrentScore] = useState(0);
   const [currentLenPercent, setCurrentLenPercent] = useState(0);
   const [isMicOn, setIsMicOn] = useState(false);
-  
-  // ★ 입력 소스 추적 ('speech' | 'typing')
   const [inputType, setInputType] = useState<'speech' | 'typing'>('speech');
 
   const currentVerse = activeVerses[verseIndex] || { ref: "로딩 중...", text: "잠시만 기다려주세요...", book:"", chapter:0, verse:0 };
@@ -135,8 +125,6 @@ export default function Home() {
 
         recognition.onresult = (event: any) => {
             if (isInputBlocked.current) return;
-
-            // ★ 음성 입력 감지됨 -> 타입 변경
             setInputType('speech');
 
             let transcript = '';
@@ -150,7 +138,7 @@ export default function Home() {
             setIsMicOn(false);
             if (inputRef.current) inputRef.current.placeholder = "마이크 대기 중...";
             if (isListeningDesired.current) {
-                try { recognition.start(); } catch (e) { isListeningDesired.current = false; }
+                try { recognition.start(); } catch (e) {}
             }
         };
         recognitionRef.current = recognition;
@@ -160,7 +148,7 @@ export default function Home() {
 
   const stopListening = () => {
       isListeningDesired.current = false;
-      if (recognitionRef.current) recognitionRef.current.stop();
+      if (recognitionRef.current) recognitionRef.current.abort();
       setIsMicOn(false);
   };
 
@@ -225,7 +213,7 @@ export default function Home() {
     setInputText("");
     setCurrentScore(0);
     setCurrentLenPercent(0);
-    setTimeout(() => { isInputBlocked.current = false; }, 100);
+    setTimeout(() => { isInputBlocked.current = false; }, 500);
 
   }, [selectedBook, selectedChapter, allVerses]);
 
@@ -267,6 +255,10 @@ export default function Home() {
 
   const performSuccessAction = (verseRef: string) => {
     isInputBlocked.current = true; 
+    if (isListeningDesired.current && recognitionRef.current) {
+        recognitionRef.current.abort(); 
+    }
+
     playSound('heaven');
     setIsSuccess(true);
     
@@ -282,7 +274,7 @@ export default function Home() {
         
         if (verseIndex < activeVerses.length - 1) {
             setVerseIndex(prev => prev + 1);
-            setTimeout(() => { isInputBlocked.current = false; }, 300);
+            setTimeout(() => { isInputBlocked.current = false; }, 500);
         } else {
             alert("이 장의 마지막 말씀입니다! 수고하셨습니다.");
             stopListening(); 
@@ -296,9 +288,7 @@ export default function Home() {
     if (isInputBlocked.current || isSuccess || loading || !currentVerse.text) return;
     if (!inputText || inputText.trim().length < 1) return;
 
-    // ★ 현재 입력 모드(inputType)를 함께 전달
     const result = isMatchEnough(inputText, currentVerse.text, inputType);
-    
     setCurrentScore(result.score);
     setCurrentLenPercent(result.lenPercent);
 
@@ -309,10 +299,7 @@ export default function Home() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isInputBlocked.current) return;
-
-    // ★ 키보드 입력 감지됨 -> 타입 변경
     setInputType('typing');
-
     setInputText(e.target.value.normalize('NFC'));
     playSound('type');
   };
@@ -326,8 +313,6 @@ export default function Home() {
   const renderVerseText = () => {
     const targetText = currentVerse.text.normalize('NFC');
     const typedText = inputText.normalize('NFC');
-
-    // 목표 길이 계산 (시각적 피드백용)
     const targetLen = inputType === 'typing' ? 100 : 95;
     const targetScore = inputType === 'typing' ? 80 : 70;
 
@@ -343,16 +328,17 @@ export default function Home() {
                 const isTyped = index < typedText.length;
                 const targetChar = targetText[index];
                 const inputChar = typedText[index];
-                let charColor = '#ffffff';
+                let charColor = '#ffffff'; // 기본 흰색
+                
                 if (isTyped) {
                     const isCorrect = targetChar === inputChar;
-                    charColor = isCorrect ? '#ffe600' : '#ff5555';
+                    // ★ 핵심 변경: 맞으면 노랑(#ffe600), 틀려도 흰색(#ffffff)으로 유지
+                    charColor = isCorrect ? '#ffe600' : '#ffffff';
                 }
                 return <span key={index} style={{ color: charColor, transition: 'color 0.1s linear' }}>{char}</span>;
             })}
             </h1>
             
-            {/* 진행 상황 디버그 바 */}
             <div style={{ marginTop: '10px', fontSize: '11px', color: '#aaa', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div>
                    모드: <span style={{ color: '#ffe600', fontWeight: 'bold' }}>{inputType === 'typing' ? '⌨️ 타자' : '🎤 음성'}</span>
@@ -411,7 +397,7 @@ export default function Home() {
     <div style={{ position: 'relative', width: '100%', height: '100vh', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       {/* Version Check Label */}
       <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, color: 'rgba(255,255,255,0.5)', fontSize: '12px', pointerEvents: 'none' }}>
-        Ver 6.0 (타자 100% / 음성 95%)
+        Ver 9.0 (오답 표시 제거)
       </div>
 
       <div style={{ 
